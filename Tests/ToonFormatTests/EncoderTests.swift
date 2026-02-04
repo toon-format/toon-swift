@@ -1201,6 +1201,36 @@ struct EncoderTests {
         #expect(intObjResult.contains("id: 456"))
     }
 
+    @Test func uint64EncodingBoundaries() async throws {
+        struct UInt64Object: Codable {
+            let value: UInt64
+        }
+
+        let smallResult = String(
+            data: try encoder.encode(UInt64Object(value: 42)),
+            encoding: .utf8
+        )!
+        #expect(smallResult == "value: 42")
+
+        let maxInt64Result = String(
+            data: try encoder.encode(UInt64Object(value: UInt64(Int64.max))),
+            encoding: .utf8
+        )!
+        #expect(maxInt64Result == "value: 9223372036854775807")
+
+        let aboveInt64Result = String(
+            data: try encoder.encode(UInt64Object(value: UInt64(Int64.max) + 1)),
+            encoding: .utf8
+        )!
+        #expect(aboveInt64Result == "value: \"9223372036854775808\"")
+
+        let maxResult = String(
+            data: try encoder.encode(UInt64Object(value: UInt64.max)),
+            encoding: .utf8
+        )!
+        #expect(maxResult == "value: \"18446744073709551615\"")
+    }
+
     @Test func optionalToNull() async throws {
         // Swift optionals convert to null when nil, similar to JavaScript's undefined → null
         struct OptionalValueObject: Codable {

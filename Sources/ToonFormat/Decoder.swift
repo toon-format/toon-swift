@@ -1724,13 +1724,20 @@ private func decodeUInt32(from value: Value) throws -> UInt32 {
 }
 
 private func decodeUInt64(from value: Value) throws -> UInt64 {
-    guard let intValue = value.intValue else {
-        throw TOONDecodingError.typeMismatch(expected: "uint64", actual: value.typeName)
+    // Try integer path first
+    if let intValue = value.intValue {
+        guard let result = UInt64(exactly: intValue) else {
+            throw TOONDecodingError.dataCorrupted("Value \(intValue) does not fit in UInt64")
+        }
+        return result
     }
-    guard let result = UInt64(exactly: intValue) else {
-        throw TOONDecodingError.dataCorrupted("Value \(intValue) does not fit in UInt64")
+
+    // Try string path (for large UInt64s)
+    if let stringValue = value.stringValue, let result = UInt64(stringValue) {
+        return result
     }
-    return result
+
+    throw TOONDecodingError.typeMismatch(expected: "uint64", actual: value.typeName)
 }
 
 // MARK: -
