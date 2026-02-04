@@ -5,9 +5,18 @@
 [![SPEC v3.0](https://img.shields.io/badge/spec-v3.0-fef3c0?labelColor=1b1b1f)](https://github.com/toon-format/spec)
 [![License: MIT](https://img.shields.io/badge/license-MIT-fef3c0?labelColor=1b1b1f)](./LICENSE.md)
 
-Compact, human-readable serialization format for LLM contexts with **30-60% token reduction** vs JSON. Combines YAML-like indentation with CSV-like tabular arrays. Full compatibility with the [official TOON specification](https://github.com/toon-format/spec).
+Compact, human-readable serialization format for LLM contexts with **30-60% token reduction** vs JSON. 
+Combines YAML-like indentation with CSV-like tabular arrays. 
+Full compatibility with the [official TOON specification](https://github.com/toon-format/spec).
 
-**Key Features:** Minimal syntax • Tabular arrays for uniform data • Array length validation • Swift 6.0+ • Configurable delimiters • Key folding / Path expansion support • Linux compatible.
+**Key Features:** 
+Minimal syntax • 
+Tabular arrays for uniform data • 
+Array length validation • 
+Swift 6.0+ • 
+Configurable delimiters • 
+Key folding / Path expansion support •
+Linux compatibility.
 
 LLM tokens are expensive, and JSON is verbose.
 TOON saves tokens while remaining human-readable by
@@ -283,7 +292,11 @@ print(toonSpecVersion) // "3.0"
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on how to get started, coding standards, and the process for submitting pull requests.
+Contributions are welcome! 
+Please read our [Contributing Guide](CONTRIBUTING.md) for
+details on how to get started, 
+coding standards, 
+and the process for submitting pull requests.
 
 Before contributing, please review:
 
@@ -292,11 +305,14 @@ Before contributing, please review:
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to hello@johannschopplich.com.
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+By participating, you are expected to uphold this code.
+Please report unacceptable behavior to hello@johannschopplich.com.
 
 ## Project Status
 
-This library implements **TOON specification version 3.0** (2025-11-24) with full encoding and decoding support.
+This library implements **TOON specification version 3.0** (2025-11-24) 
+with full encoding and decoding support.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
