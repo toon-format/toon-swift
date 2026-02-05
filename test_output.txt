@@ -1,0 +1,462 @@
+Building for debugging...
+[0/2] Write swift-version-29D1E07A359104D9.txt
+Build complete! (0.09s)
+Test Suite 'All tests' started at 2026-02-04 23:58:56.429.
+Test Suite 'ToonFormatPackageTests.xctest' started at 2026-02-04 23:58:56.430.
+Test Suite 'BugHuntingTests' started at 2026-02-04 23:58:56.430.
+Test Case '-[ToonFormatTests.BugHuntingTests testDeepRecursion]' started.
+/Users/rickhohler/CODE/GITHUB/opensource_contribute/toon-swift/Tests/ToonFormatTests/BugHuntingTests.swift:79: error: -[ToonFormatTests.BugHuntingTests testDeepRecursion] : failed - Should have thrown recursion error
+Test Case '-[ToonFormatTests.BugHuntingTests testDeepRecursion]' failed (0.046 seconds).
+Test Case '-[ToonFormatTests.BugHuntingTests testNegativeZeroEncoding]' started.
+Test Case '-[ToonFormatTests.BugHuntingTests testNegativeZeroEncoding]' passed (0.000 seconds).
+Test Case '-[ToonFormatTests.BugHuntingTests testValueFromDictionaryKeyOrder]' started.
+Test Case '-[ToonFormatTests.BugHuntingTests testValueFromDictionaryKeyOrder]' passed (0.000 seconds).
+Test Suite 'BugHuntingTests' failed at 2026-02-04 23:58:56.477.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 0.047 (0.047) seconds
+Test Suite 'UInt64DecodingTests' started at 2026-02-04 23:58:56.477.
+Test Case '-[ToonFormatTests.UInt64DecodingTests testUInt64RoundTrip]' started.
+Test Case '-[ToonFormatTests.UInt64DecodingTests testUInt64RoundTrip]' passed (0.000 seconds).
+Test Suite 'UInt64DecodingTests' passed at 2026-02-04 23:58:56.478.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'ToonFormatPackageTests.xctest' failed at 2026-02-04 23:58:56.478.
+	 Executed 4 tests, with 1 failure (0 unexpected) in 0.047 (0.048) seconds
+Test Suite 'All tests' failed at 2026-02-04 23:58:56.478.
+	 Executed 4 tests, with 1 failure (0 unexpected) in 0.047 (0.049) seconds
+Encoded Negative Zero: value: -0
+􀟈  Test run started.
+􀄵  Testing Library Version: 6.2 (3fdabe5392108d8)
+􀄵  Target Platform: arm64-apple-macosx
+􀟈  Suite "Encoder Tests" started.
+􀟈  Suite "Decoder Tests" started.
+􀟈  Suite "Round Trip Tests" started.
+􀟈  Test arraysWithAmbiguousStrings() started.
+􀟈  Test roundTripTabularArray() started.
+􀟈  Test roundTripUnicodeStrings() started.
+􀟈  Test roundTripEscapeSequences() started.
+􀟈  Test roundTripSimpleObject() started.
+􀟈  Test roundTripOptionalValues() started.
+􀟈  Test roundTripTabDelimiter() started.
+􀟈  Test roundTripPrimitiveArrays() started.
+􀟈  Test roundTripComplexStructure() started.
+􀟈  Test roundTripUInt64Values() started.
+􀟈  Test roundTripData() started.
+􀟈  Test roundTripURL() started.
+􀟈  Test roundTripNullValues() started.
+􀟈  Test roundTripMixedArrayFormats() started.
+􀟈  Test tabDelimiter() started.
+􀟈  Test roundTripKeyFolding() started.
+􀟈  Test roundTripArrayOfArrays() started.
+􀟈  Test uint64QuotedMax() started.
+􀟈  Test roundTripDate() started.
+􀟈  Test integerOverflowUInt8() started.
+􀟈  Test roundTripNestedOptionalArrays() started.
+􀟈  Test roundTripEnums() started.
+􀟈  Test quotedEscapeInString() started.
+􀟈  Test roundTripQuotedStrings() started.
+􀟈  Test emptyNestedObject() started.
+􀟈  Test integerTypesConversion() started.
+􀟈  Test roundTripEmptyArray() started.
+􀟈  Test roundTripNestedObjects() started.
+􀟈  Test roundTripSpecialKeyNames() started.
+􀟈  Test scientificNotation() started.
+􀟈  Test booleans() started.
+􀟈  Test objectWithNullValue() started.
+􀟈  Test keysWithSpacesAndHyphens() started.
+􀟈  Test dataConversion() started.
+􀟈  Test tabularFormatWithNullValues() started.
+􀟈  Test int16Boundaries() started.
+􀟈  Test unicodeAndEmoji() started.
+􀟈  Test objectWithSpecialCharacterStrings() started.
+􀟈  Test complexStructure() started.
+􀟈  Test uint32Boundaries() started.
+􀟈  Test booleans() started.
+􀟈  Test uint16Boundaries() started.
+􀟈  Test nonFiniteNumbers() started.
+􀟈  Test dataConversion() started.
+􀟈  Test optionalArrays() started.
+􀟈  Test uint64Boundaries() started.
+􀟈  Test emptyArrays() started.
+􀟈  Test keyFoldingWithMultipleFields() started.
+􀟈  Test listFormatWithEmptyArraysInObjects() started.
+􀟈  Test nestedTabularArrayInListFormat() started.
+􀟈  Test listFormatForDifferentFields() started.
+􀟈  Test complexNestedObjectsWithArrays() started.
+􀟈  Test boolArrayInline() started.
+􀟈  Test escapeSequences() started.
+􀟈  Test stringStringDictionary() started.
+􀟈  Test nestedDictionary() started.
+􀟈  Test keyFoldingStopsAtInvalidIdentifier() started.
+􀟈  Test flattenDepthLimited() started.
+􀟈  Test tabDelimiter() started.
+􀟈  Test rootArrayOfArrays() started.
+􀟈  Test noTrailingNewline() started.
+􀟈  Test extraWhitespaceInValues() started.
+􀟈  Test tabularFormatWithQuotedKeys() started.
+􀟈  Test objectsWithOptionalFields() started.
+􀟈  Test keysWithSpecialCharacters() started.
+􀟈  Test rootPrimitiveArray() started.
+􀟈  Test arraysWithSpecialStringValues() started.
+􀟈  Test rootEmptyArray() started.
+􀟈  Test preserveFieldOrderWhenPrimitiveFirst() started.
+􀟈  Test largeIntegers() started.
+􀟈  Test simpleObject() started.
+􀟈  Test tabularArraysWithPipeDelimiter() started.
+􀟈  Test nestedListArrayInListFormat() started.
+􀟈  Test doubles() started.
+􀟈  Test integers() started.
+􀟈  Test pathExpansionSafe() started.
+􀟈  Test emptyString() started.
+􀟈  Test countMismatch() started.
+􀟈  Test versionDeclaration() started.
+􀟈  Test controlCharacters() started.
+􀟈  Test objectKeyLimitExceeded() started.
+􀟈  Test specialNumericValues() started.
+􀟈  Test inputSizeLimit() started.
+􀟈  Test objectWithBothInlineAndExpandedArrays() started.
+􀟈  Test objectWithSpecialCharacterStrings() started.
+􀟈  Test deeplyNestedArrays() started.
+􀟈  Test integerOverflowUInt8TooLarge() started.
+􀟈  Test tabularFormatWithDelimiters() started.
+􀟈  Test autoDetectIndentation3Spaces() started.
+􀟈  Test rootObjectArrayWithOptionalFields() started.
+􀟈  Test urlConversion() started.
+􀟈  Test nullRootValue() started.
+􀟈  Test objectWithAmbiguousStrings() started.
+􀟈  Test multipleEscapeSequences() started.
+􀟈  Test stringBackedEnum() started.
+􀟈  Test optionalToNull() started.
+􀟈  Test emptyStringInArray() started.
+􀟈  Test zeroDouble() started.
+􀟈  Test arraysWithStructuralStrings() started.
+􀟈  Test unlimitedLimitsWork() started.
+􀟈  Test tabularFormat() started.
+􀟈  Test primitiveArraysInline() started.
+􀟈  Test lengthMarkerHashRejected() started.
+􀟈  Test delimiterAwareQuoting() started.
+􀟈  Test numbers() started.
+􀟈  Test autoDetectIndentation4Spaces() started.
+􀟈  Test arrayOfArraysWithEmptyInnerArrays() started.
+􀟈  Test keysWithSpacesAndHyphens() started.
+􀟈  Test keyFoldingNoCollision() started.
+􀟈  Test urlConversion() started.
+􀟈  Test keyFoldingWithArray() started.
+􀟈  Test roundTripPipeDelimiter() started.
+􀟈  Test arrayWithQuotedStrings() started.
+􀟈  Test integerOverflowInt8() started.
+􀟈  Test canonicalNumberFormat() started.
+􀟈  Test listFormatWithOnlyArrayFields() started.
+􀟈  Test tabularArraysWithTabDelimiter() started.
+􀟈  Test stringsThatLookLikeBooleans() started.
+􀟈  Test nullValues() started.
+􀟈  Test keyFoldingCollisionAvoidance() started.
+􀟈  Test negativeDouble() started.
+􀟈  Test emptyArraysOnHyphenLineWhenFirst() started.
+􀟈  Test keyFoldingSafe() started.
+􀟈  Test flattenDepthUnlimited() started.
+􀟈  Test multipleEmptyArrays() started.
+􀟈  Test arraysWithSpecialCharacterStrings() started.
+􀟈  Test emptyArrays() started.
+􀟈  Test rootObjectArray() started.
+􀟈  Test flattenDepthThree() started.
+􀟈  Test floatDecoding() started.
+􀟈  Test preserveFieldOrderInListItems() started.
+􀟈  Test keyNotFound() started.
+􀟈  Test nullInArray() started.
+􀟈  Test invalidBase64Data() started.
+􀟈  Test emptyObject() started.
+􀟈  Test objectWithPaddedStrings() started.
+􀟈  Test emptyString() started.
+􀟈  Test tabularFormat() started.
+􀟈  Test primitiveArrays() started.
+􀟈  Test quotedStrings() started.
+􀟈  Test emptyObject() started.
+􀟈  Test objectWithNullValue() started.
+􀟈  Test depthLimitExceeded() started.
+􀟈  Test pipeDelimiter() started.
+􀟈  Test deepNestedObjects() started.
+􀟈  Test listFormatWithArrayOfArrays() started.
+􀟈  Test invalidEscapeSequence() started.
+􀟈  Test arrayOfArraysWithDelimiters() started.
+􀟈  Test trailingBackslashError() started.
+􀟈  Test tabularFieldOrderFromFirstObject() started.
+􀟈  Test unicodeAndEmoji() started.
+􀟈  Test arrayOfArraysWithMixedLengths() started.
+􀟈  Test flattenDepthOne() started.
+􀟈  Test emptyStringKey() started.
+􀟈  Test pipeDelimiter() started.
+􀟈  Test pathExpansionSafeCollisionError() started.
+􀟈  Test dateConversion() started.
+􀟈  Test intBackedEnum() started.
+􀟈  Test missingOptionalKey() started.
+􀟈  Test tabularFormatWithAmbiguousStrings() started.
+􀟈  Test invalidURL() started.
+􀟈  Test objectsWithNestedValues() started.
+􀟈  Test singleColumnTabular() started.
+􀟈  Test fieldCountMismatch() started.
+􀟈  Test uint64EncodingBoundaries() started.
+􀟈  Test simpleObject() started.
+􀟈  Test arrayOfArrays() started.
+􀟈  Test arrayOfArrays() started.
+􀟈  Test pathExpansionAutomaticFallbackOnCollision() started.
+􀟈  Test tabularArraysWithPipeDelimiter() started.
+􀟈  Test invalidDateFormat() started.
+􀟈  Test dateConversion() started.
+􀟈  Test versionDeclaration() started.
+􀟈  Test safeStrings() started.
+􀟈  Test listFormatWithMultipleArrayFields() started.
+􀟈  Test complexStructure() started.
+􀟈  Test pathExpansionDisabled() started.
+􀟈  Test singleSpaceIndentation() started.
+􀟈  Test nestedTabularArraysFirstFieldOnHyphenLine() started.
+􀟈  Test arrayLengthLimit() started.
+􀟈  Test rootObjectArray() started.
+􀟈  Test rootObjectArrayInListFormat() started.
+􀟈  Test tabularFormatWithNullValues() started.
+􀟈  Test noTrailingSpaces() started.
+􀟈  Test safeStrings() started.
+􀟈  Test listFormatWithObjects() started.
+􀟈  Test nonCommaDelimiterDoesNotQuoteCommas() started.
+􀟈  Test controlCharactersInKeys() started.
+􀟈  Test emptyNestedObject() started.
+􀟈  Test numericKeys() started.
+􀟈  Test emptyStringInArrays() started.
+􀟈  Test quotedNumberStrings() started.
+􀟈  Test crlfLineEndings() started.
+􀟈  Test int32Boundaries() started.
+􀟈  Test keyFoldingDisabled() started.
+􀟈  Test keysWithSpecialCharacters() started.
+􀟈  Test tabularWithQuotedFieldNames() started.
+􀟈  Test typeMismatch() started.
+􀟈  Test quotesInKeys() started.
+􀟈  Test unicodeKeys() started.
+􀟈  Test multipleLevelPathExpansion() started.
+􀟈  Test decodingWithDefaultValues() started.
+􀟈  Test listFormatWithNestedArrays() started.
+􀟈  Test arrayOfObjectsWithArrays() started.
+􀟈  Test stringsThatLookLikeNumbers() started.
+􀟈  Test pathExpansionAutomatic() started.
+􀟈  Test rootPrimitiveArray() started.
+􀟈  Test uint64QuotedOverflow() started.
+􀟈  Test structuralCharacters() started.
+􀟈  Test deepNestedObjects() started.
+􀟈  Test presentOptionalWithValue() started.
+􀟈  Test whitespaceOnlyStringsInArrays() started.
+􀟈  Test rootEmptyArray() started.
+􀢄  Test specialNumericValues() recorded an issue at EncoderTests.swift:71:9: Expectation failed: String(data: try encoder.encode(-0.0), encoding: .utf8) == "0"
+􁁛  Test arraysWithAmbiguousStrings() passed after 0.007 seconds.
+􁁛  Test roundTripSimpleObject() passed after 0.006 seconds.
+􁁛  Test roundTripUnicodeStrings() passed after 0.007 seconds.
+􁁛  Test roundTripPrimitiveArrays() passed after 0.006 seconds.
+􁁛  Test roundTripOptionalValues() passed after 0.007 seconds.
+􁁛  Test roundTripEscapeSequences() passed after 0.007 seconds.
+􁁛  Test roundTripComplexStructure() passed after 0.007 seconds.
+􁁛  Test roundTripNullValues() passed after 0.007 seconds.
+􁁛  Test roundTripTabDelimiter() passed after 0.007 seconds.
+􁁛  Test roundTripNestedOptionalArrays() passed after 0.007 seconds.
+􁁛  Test roundTripData() passed after 0.008 seconds.
+􁁛  Test roundTripURL() passed after 0.008 seconds.
+􁁛  Test quotedEscapeInString() passed after 0.007 seconds.
+􁁛  Test roundTripUInt64Values() passed after 0.008 seconds.
+􁁛  Test uint64QuotedMax() passed after 0.008 seconds.
+􁁛  Test integerTypesConversion() passed after 0.008 seconds.
+􁁛  Test roundTripArrayOfArrays() passed after 0.008 seconds.
+􁁛  Test roundTripEnums() passed after 0.008 seconds.
+􁁛  Test roundTripEmptyArray() passed after 0.008 seconds.
+􁁛  Test scientificNotation() passed after 0.008 seconds.
+􁁛  Test keysWithSpacesAndHyphens() passed after 0.008 seconds.
+􁁛  Test dataConversion() passed after 0.008 seconds.
+􁁛  Test roundTripKeyFolding() passed after 0.008 seconds.
+􁁛  Test emptyNestedObject() passed after 0.008 seconds.
+􁁛  Test roundTripMixedArrayFormats() passed after 0.008 seconds.
+􁁛  Test booleans() passed after 0.008 seconds.
+􁁛  Test integerOverflowUInt8() passed after 0.008 seconds.
+􁁛  Test roundTripQuotedStrings() passed after 0.008 seconds.
+􁁛  Test dataConversion() passed after 0.008 seconds.
+􁁛  Test complexStructure() passed after 0.008 seconds.
+􁁛  Test unicodeAndEmoji() passed after 0.008 seconds.
+􁁛  Test emptyArrays() passed after 0.008 seconds.
+􁁛  Test listFormatForDifferentFields() passed after 0.008 seconds.
+􁁛  Test listFormatWithEmptyArraysInObjects() passed after 0.008 seconds.
+􁁛  Test escapeSequences() passed after 0.008 seconds.
+􁁛  Test boolArrayInline() passed after 0.008 seconds.
+􁁛  Test complexNestedObjectsWithArrays() passed after 0.008 seconds.
+􁁛  Test rootEmptyArray() passed after 0.008 seconds.
+􁁛  Test rootPrimitiveArray() passed after 0.008 seconds.
+􁁛  Test rootArrayOfArrays() passed after 0.008 seconds.
+􁁛  Test roundTripNestedObjects() passed after 0.008 seconds.
+􁁛  Test tabDelimiter() passed after 0.008 seconds.
+􁁛  Test uint16Boundaries() passed after 0.008 seconds.
+􁁛  Test stringStringDictionary() passed after 0.008 seconds.
+􁁛  Test nestedDictionary() passed after 0.008 seconds.
+􁁛  Test booleans() passed after 0.008 seconds.
+􁁛  Test doubles() passed after 0.008 seconds.
+􁁛  Test objectsWithOptionalFields() passed after 0.008 seconds.
+􁁛  Test objectWithNullValue() passed after 0.008 seconds.
+􁁛  Test largeIntegers() passed after 0.008 seconds.
+􁁛  Test integers() passed after 0.008 seconds.
+􁁛  Test nestedTabularArrayInListFormat() passed after 0.008 seconds.
+􁁛  Test int16Boundaries() passed after 0.008 seconds.
+􁁛  Test noTrailingNewline() passed after 0.008 seconds.
+􁁛  Test uint32Boundaries() passed after 0.008 seconds.
+􁁛  Test controlCharacters() passed after 0.008 seconds.
+􁁛  Test tabDelimiter() passed after 0.009 seconds.
+􁁛  Test arraysWithSpecialStringValues() passed after 0.008 seconds.
+􁁛  Test integerOverflowUInt8TooLarge() passed after 0.008 seconds.
+􁁛  Test preserveFieldOrderWhenPrimitiveFirst() passed after 0.008 seconds.
+􁁛  Test extraWhitespaceInValues() passed after 0.008 seconds.
+􁁛  Test roundTripSpecialKeyNames() passed after 0.009 seconds.
+􁁛  Test nonFiniteNumbers() passed after 0.008 seconds.
+􁁛  Test countMismatch() passed after 0.008 seconds.
+􁁛  Test keyFoldingStopsAtInvalidIdentifier() passed after 0.008 seconds.
+􁁛  Test pathExpansionSafe() passed after 0.008 seconds.
+􁁛  Test objectWithSpecialCharacterStrings() passed after 0.008 seconds.
+􁁛  Test uint64Boundaries() passed after 0.009 seconds.
+􁁛  Test objectKeyLimitExceeded() passed after 0.008 seconds.
+􁁛  Test keyFoldingWithMultipleFields() passed after 0.008 seconds.
+􁁛  Test autoDetectIndentation3Spaces() passed after 0.008 seconds.
+􁁛  Test keysWithSpecialCharacters() passed after 0.008 seconds.
+􁁛  Test deeplyNestedArrays() passed after 0.008 seconds.
+􁁛  Test objectWithBothInlineAndExpandedArrays() passed after 0.009 seconds.
+􁁛  Test nullRootValue() passed after 0.008 seconds.
+􁁛  Test objectWithAmbiguousStrings() passed after 0.008 seconds.
+􁁛  Test tabularArraysWithPipeDelimiter() passed after 0.009 seconds.
+􁁛  Test inputSizeLimit() passed after 0.008 seconds.
+􁁛  Test unlimitedLimitsWork() passed after 0.008 seconds.
+􁁛  Test objectWithSpecialCharacterStrings() passed after 0.008 seconds.
+􁁛  Test tabularFormatWithDelimiters() passed after 0.008 seconds.
+􁁛  Test tabularFormatWithQuotedKeys() passed after 0.008 seconds.
+􁁛  Test stringBackedEnum() passed after 0.008 seconds.
+􁁛  Test keysWithSpacesAndHyphens() passed after 0.008 seconds.
+􁁛  Test tabularFormatWithNullValues() passed after 0.009 seconds.
+􁁛  Test roundTripTabularArray() passed after 0.010 seconds.
+􁁛  Test arraysWithStructuralStrings() passed after 0.008 seconds.
+􁁛  Test nestedListArrayInListFormat() passed after 0.008 seconds.
+􁁛  Test emptyStringInArray() passed after 0.008 seconds.
+􁁛  Test flattenDepthLimited() passed after 0.009 seconds.
+􁁛  Test versionDeclaration() passed after 0.008 seconds.
+􁁛  Test tabularFormat() passed after 0.008 seconds.
+􁁛  Test urlConversion() passed after 0.008 seconds.
+􁁛  Test simpleObject() passed after 0.009 seconds.
+􀢄  Test specialNumericValues() failed after 0.008 seconds with 1 issue.
+􁁛  Test emptyArrays() passed after 0.008 seconds.
+􁁛  Test multipleEmptyArrays() passed after 0.008 seconds.
+􁁛  Test keyFoldingNoCollision() passed after 0.008 seconds.
+􁁛  Test autoDetectIndentation4Spaces() passed after 0.008 seconds.
+􁁛  Test negativeDouble() passed after 0.008 seconds.
+􁁛  Test integerOverflowInt8() passed after 0.008 seconds.
+􁁛  Test primitiveArraysInline() passed after 0.008 seconds.
+􁁛  Test keyFoldingWithArray() passed after 0.008 seconds.
+􁁛  Test optionalToNull() passed after 0.008 seconds.
+􁁛  Test nullValues() passed after 0.008 seconds.
+􁁛  Test emptyString() passed after 0.008 seconds.
+􁁛  Test multipleEscapeSequences() passed after 0.008 seconds.
+􁁛  Test keyNotFound() passed after 0.008 seconds.
+􁁛  Test roundTripPipeDelimiter() passed after 0.008 seconds.
+􁁛  Test arrayWithQuotedStrings() passed after 0.008 seconds.
+􁁛  Test keyFoldingSafe() passed after 0.008 seconds.
+􁁛  Test keyFoldingCollisionAvoidance() passed after 0.008 seconds.
+􁁛  Test optionalArrays() passed after 0.009 seconds.
+􁁛  Test canonicalNumberFormat() passed after 0.008 seconds.
+􁁛  Test tabularArraysWithTabDelimiter() passed after 0.008 seconds.
+􁁛  Test preserveFieldOrderInListItems() passed after 0.008 seconds.
+􁁛  Test emptyObject() passed after 0.008 seconds.
+􁁛  Test numbers() passed after 0.008 seconds.
+􁁛  Test stringsThatLookLikeBooleans() passed after 0.008 seconds.
+􁁛  Test roundTripDate() passed after 0.010 seconds.
+􁁛  Test floatDecoding() passed after 0.008 seconds.
+􁁛  Test invalidBase64Data() passed after 0.008 seconds.
+􁁛  Test delimiterAwareQuoting() passed after 0.008 seconds.
+􁁛  Test primitiveArrays() passed after 0.008 seconds.
+􁁛  Test flattenDepthThree() passed after 0.008 seconds.
+􁁛  Test nullInArray() passed after 0.008 seconds.
+􁁛  Test lengthMarkerHashRejected() passed after 0.008 seconds.
+􁁛  Test flattenDepthUnlimited() passed after 0.008 seconds.
+􁁛  Test depthLimitExceeded() passed after 0.008 seconds.
+􁁛  Test rootObjectArrayWithOptionalFields() passed after 0.009 seconds.
+􁁛  Test listFormatWithArrayOfArrays() passed after 0.008 seconds.
+􁁛  Test emptyArraysOnHyphenLineWhenFirst() passed after 0.008 seconds.
+􁁛  Test deepNestedObjects() passed after 0.008 seconds.
+􁁛  Test tabularFormat() passed after 0.008 seconds.
+􁁛  Test trailingBackslashError() passed after 0.007 seconds.
+􁁛  Test emptyString() passed after 0.008 seconds.
+􁁛  Test urlConversion() passed after 0.008 seconds.
+􁁛  Test zeroDouble() passed after 0.009 seconds.
+􁁛  Test listFormatWithOnlyArrayFields() passed after 0.008 seconds.
+􁁛  Test unicodeAndEmoji() passed after 0.008 seconds.
+􁁛  Test arraysWithSpecialCharacterStrings() passed after 0.008 seconds.
+􁁛  Test tabularFieldOrderFromFirstObject() passed after 0.008 seconds.
+􁁛  Test arrayOfArraysWithEmptyInnerArrays() passed after 0.009 seconds.
+􁁛  Test objectWithNullValue() passed after 0.008 seconds.
+􁁛  Test emptyStringKey() passed after 0.008 seconds.
+􁁛  Test intBackedEnum() passed after 0.008 seconds.
+􁁛  Test objectWithPaddedStrings() passed after 0.008 seconds.
+􁁛  Test flattenDepthOne() passed after 0.008 seconds.
+􁁛  Test invalidURL() passed after 0.007 seconds.
+􁁛  Test missingOptionalKey() passed after 0.008 seconds.
+􁁛  Test emptyObject() passed after 0.008 seconds.
+􁁛  Test arrayOfArraysWithDelimiters() passed after 0.008 seconds.
+􁁛  Test uint64EncodingBoundaries() passed after 0.009 seconds.
+􁁛  Test invalidEscapeSequence() passed after 0.008 seconds.
+􁁛  Test pipeDelimiter() passed after 0.008 seconds.
+􁁛  Test safeStrings() passed after 0.007 seconds.
+􁁛  Test pathExpansionSafeCollisionError() passed after 0.008 seconds.
+􁁛  Test rootObjectArray() passed after 0.008 seconds.
+􁁛  Test tabularFormatWithAmbiguousStrings() passed after 0.008 seconds.
+􁁛  Test arrayOfArraysWithMixedLengths() passed after 0.008 seconds.
+􁁛  Test simpleObject() passed after 0.008 seconds.
+􁁛  Test pathExpansionDisabled() passed after 0.007 seconds.
+􁁛  Test rootObjectArray() passed after 0.010 seconds.
+􁁛  Test rootObjectArrayInListFormat() passed after 0.008 seconds.
+􁁛  Test arrayOfArrays() passed after 0.008 seconds.
+􁁛  Test singleSpaceIndentation() passed after 0.008 seconds.
+􁁛  Test tabularFormatWithNullValues() passed after 0.008 seconds.
+􁁛  Test pipeDelimiter() passed after 0.008 seconds.
+􁁛  Test quotedNumberStrings() passed after 0.008 seconds.
+􁁛  Test arrayLengthLimit() passed after 0.008 seconds.
+􁁛  Test listFormatWithObjects() passed after 0.008 seconds.
+􁁛  Test noTrailingSpaces() passed after 0.008 seconds.
+􁁛  Test quotedStrings() passed after 0.010 seconds.
+􁁛  Test listFormatWithMultipleArrayFields() passed after 0.008 seconds.
+􁁛  Test fieldCountMismatch() passed after 0.009 seconds.
+􁁛  Test quotesInKeys() passed after 0.008 seconds.
+􁁛  Test arrayOfArrays() passed after 0.008 seconds.
+􁁛  Test controlCharactersInKeys() passed after 0.007 seconds.
+􁁛  Test unicodeKeys() passed after 0.007 seconds.
+􁁛  Test int32Boundaries() passed after 0.008 seconds.
+􁁛  Test keysWithSpecialCharacters() passed after 0.007 seconds.
+􁁛  Test singleColumnTabular() passed after 0.008 seconds.
+􁁛  Test objectsWithNestedValues() passed after 0.009 seconds.
+􁁛  Test versionDeclaration() passed after 0.008 seconds.
+􁁛  Test decodingWithDefaultValues() passed after 0.007 seconds.
+􁁛  Test tabularWithQuotedFieldNames() passed after 0.007 seconds.
+􁁛  Test pathExpansionAutomaticFallbackOnCollision() passed after 0.008 seconds.
+􁁛  Test dateConversion() passed after 0.008 seconds.
+􁁛  Test complexStructure() passed after 0.008 seconds.
+􁁛  Test typeMismatch() passed after 0.007 seconds.
+􁁛  Test invalidDateFormat() passed after 0.008 seconds.
+􁁛  Test arrayOfObjectsWithArrays() passed after 0.007 seconds.
+􁁛  Test multipleLevelPathExpansion() passed after 0.007 seconds.
+􁁛  Test rootPrimitiveArray() passed after 0.007 seconds.
+􁁛  Test listFormatWithNestedArrays() passed after 0.007 seconds.
+􁁛  Test emptyStringInArrays() passed after 0.008 seconds.
+􁁛  Test pathExpansionAutomatic() passed after 0.007 seconds.
+􁁛  Test numericKeys() passed after 0.007 seconds.
+􁁛  Test safeStrings() passed after 0.008 seconds.
+􁁛  Test crlfLineEndings() passed after 0.007 seconds.
+􁁛  Test deepNestedObjects() passed after 0.008 seconds.
+􁁛  Test presentOptionalWithValue() passed after 0.007 seconds.
+􁁛  Test structuralCharacters() passed after 0.008 seconds.
+􁁛  Test uint64QuotedOverflow() passed after 0.007 seconds.
+􁁛  Test emptyNestedObject() passed after 0.007 seconds.
+􁁛  Test dateConversion() passed after 0.009 seconds.
+􁁛  Test rootEmptyArray() passed after 0.007 seconds.
+􁁛  Test stringsThatLookLikeNumbers() passed after 0.007 seconds.
+􁁛  Test whitespaceOnlyStringsInArrays() passed after 0.007 seconds.
+􁁛  Test nonCommaDelimiterDoesNotQuoteCommas() passed after 0.008 seconds.
+􁁛  Test tabularArraysWithPipeDelimiter() passed after 0.008 seconds.
+􁁛  Test nestedTabularArraysFirstFieldOnHyphenLine() passed after 0.008 seconds.
+􁁛  Test keyFoldingDisabled() passed after 0.008 seconds.
+􁁛  Suite "Round Trip Tests" passed after 0.012 seconds.
+􁁛  Suite "Decoder Tests" passed after 0.012 seconds.
+􀢄  Suite "Encoder Tests" failed after 0.013 seconds with 1 issue.
+􀢄  Test run with 213 tests in 3 suites failed after 0.013 seconds with 1 issue.

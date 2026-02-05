@@ -1,1 +1,0 @@
-Hi @mattt! 👋 Just wanted to say I'm really impressed with the TOON format and this Swift implementation—it's a great concept for optimizing token usage. I stumbled upon this `UInt64` edge case while exploring the code and wanted to contribute a fix. Thanks for the hard work on this!
