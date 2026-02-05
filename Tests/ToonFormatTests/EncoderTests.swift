@@ -68,7 +68,7 @@ struct EncoderTests {
     }
 
     @Test func specialNumericValues() async throws {
-        #expect(String(data: try encoder.encode(-0.0), encoding: .utf8) == "0")
+        #expect(String(data: try encoder.encode(-0.0), encoding: .utf8) == "-0")
         #expect(String(data: try encoder.encode(1e6), encoding: .utf8) == "1000000")
         #expect(String(data: try encoder.encode(1e-6), encoding: .utf8) == "0.000001")
         #expect(String(data: try encoder.encode(1e20), encoding: .utf8) == "100000000000000000000")
