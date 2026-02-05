@@ -6,6 +6,29 @@ import Foundation
 /// For more information, see https://github.com/toon-format/spec
 public final class TOONEncoder {
 
+    /// Configuration for the encoder.
+    public struct Configuration: Sendable {
+        /// Strategy for encoding negative zero (-0.0).
+        public enum MinusZeroStrategy: Sendable {
+            /// Normalize negative zero to positive zero (0.0).
+            /// This is the default behavior and matches canonical JSON.
+            case normalized
+            
+            /// Preserve negative zero as "-0".
+            /// Useful for scientific or graphics applications where sign matters.
+            case preserved
+        }
+        
+        /// The strategy to use for encoding negative zero.
+        public var minusZeroStrategy: MinusZeroStrategy = .normalized
+        
+        /// Creates a default configuration.
+        public init() {}
+    }
+
+    /// The encoder's configuration.
+    public var configuration: Configuration = Configuration()
+
     /// The number of spaces per indentation level.
     public var indent: Int = 2
 
@@ -622,7 +645,11 @@ public final class TOONEncoder {
 
             // Format numbers in decimal form without scientific notation
             if doubleValue == 0.0 && doubleValue.sign == .minus {
-                return "0"  // Convert -0 to 0
+                 if case .preserved = configuration.minusZeroStrategy {
+                     return "-0"
+                 }
+                 // Default to canonical 0
+                 return "0"
             }
 
             if let formatted = numberFormatter.string(from: NSNumber(value: doubleValue)) {
