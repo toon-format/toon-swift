@@ -629,7 +629,7 @@ public final class TOONEncoder {
 
             // Format numbers in decimal form without scientific notation
             if doubleValue == 0.0 && doubleValue.sign == .minus {
-                return "-0"  // Preserve negative zero
+                return "0"  // Convert -0 to 0
             }
 
             if let formatted = numberFormatter.string(from: NSNumber(value: doubleValue)) {

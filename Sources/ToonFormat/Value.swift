@@ -182,14 +182,14 @@ enum Value: Equatable {
 
         if let dictionaryValue = value as? [String: Any] {
             var object: [String: Value] = [:]
-            // Sort keys to ensure deterministic order
-            let sortedKeys = dictionaryValue.keys.sorted()
-            
-            for key in sortedKeys {
-                let value = dictionaryValue[key]!
+            var keyOrder: [String] = []
+            for (key, value) in dictionaryValue {
+                if !keyOrder.contains(key) {
+                    keyOrder.append(key)
+                }
                 object[key] = Value.from(value)
             }
-            return .object(object, keyOrder: sortedKeys)
+            return .object(object, keyOrder: keyOrder)
         }
 
         return .null
