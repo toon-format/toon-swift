@@ -66,16 +66,15 @@ final class BugHuntingTests: XCTestCase {
     // MARK: - 3. Recursion Limit (Stack Overflow)
     
     func testDeepRecursion() {
-        // Create nested structure depth of 100
+        // Create nested structure depth of 20 (safe for all CI environments)
         var deepValue: Value = .int(1)
-        for _ in 0..<100 {
+        for _ in 0..<20 {
             deepValue = .array([deepValue])
         }
         
         let encoder = TOONEncoder()
-        // Set a low limit (50) to verify the mechanism without risking stack overflow
-        // on constrained CI environments (macOS stack size varies vs Linux).
-        encoder.recursionLimit = 50
+        // Set a low limit (10) to verify the mechanism
+        encoder.recursionLimit = 10
         
         do {
             _ = try encoder.encode(["value": deepValue])
