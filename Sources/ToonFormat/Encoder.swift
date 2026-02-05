@@ -39,11 +39,6 @@ public final class TOONEncoder {
     /// - Output: `a.b.c: 1`
     public var flattenDepth: Int = .max
 
-    /// The maximum nesting depth allowed during encoding.
-    ///
-    /// - Default is 1000.
-    public var recursionLimit: Int = 1000
-
     /// Key folding mode.
     public enum KeyFolding: Hashable, Sendable {
         /// No key folding.
@@ -119,9 +114,7 @@ public final class TOONEncoder {
         } else if mirror.subjectType == Data.self, let data = value as? Data {
             v = .data(data)
         } else {
-            var userInfo = [CodingUserInfoKey: Any]()
-            userInfo[.toonRecursionLimit] = recursionLimit
-            let encoder = Encoder(userInfo: userInfo)
+            let encoder = Encoder(userInfo: [:])
             try value.encode(to: encoder)
             v = encoder.encodedValue
         }
@@ -727,10 +720,6 @@ public final class TOONEncoder {
     }
 }
 
-fileprivate extension CodingUserInfoKey {
-    static let toonRecursionLimit = CodingUserInfoKey(rawValue: "toonRecursionLimit")!
-}
-
 // MARK: - Internal Encoder
 
 extension TOONEncoder {
@@ -880,12 +869,6 @@ extension TOONEncoder {
         }
 
         func encode<T: Encodable>(_ value: T, forKey key: Key) throws {
-            if let limit = encoder.userInfo[.toonRecursionLimit] as? Int, encoder.codingPath.count > limit {
-                throw EncodingError.invalidValue(value, EncodingError.Context(
-                    codingPath: codingPath + [key],
-                    debugDescription: "Recursion limit of \(limit) exceeded"
-                ))
-            }
             trackKey(key.stringValue)
 
             // Handle special types by checking the mirror of the value
@@ -1163,12 +1146,6 @@ extension TOONEncoder {
         }
 
         func encode<T: Encodable>(_ value: T) throws {
-            if let limit = encoder.userInfo[.toonRecursionLimit] as? Int, encoder.codingPath.count > limit {
-                 throw EncodingError.invalidValue(value, EncodingError.Context(
-                     codingPath: codingPath + [IndexedCodingKey(intValue: count)],
-                     debugDescription: "Recursion limit of \(limit) exceeded"
-                 ))
-            }
             // Handle special types
             let mirror = Mirror(reflecting: value)
             if mirror.subjectType == Date.self, let date = value as? Date {
@@ -1311,12 +1288,6 @@ extension TOONEncoder {
         }
 
         func encode<T: Encodable>(_ value: T) throws {
-            if let limit = encoder.userInfo[.toonRecursionLimit] as? Int, encoder.codingPath.count > limit {
-                 throw EncodingError.invalidValue(value, EncodingError.Context(
-                     codingPath: codingPath,
-                     debugDescription: "Recursion limit of \(limit) exceeded"
-                 ))
-            }
             // Handle special types
             let mirror = Mirror(reflecting: value)
             if mirror.subjectType == Date.self, let date = value as? Date {
