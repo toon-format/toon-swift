@@ -110,6 +110,39 @@ struct EncoderTests {
         #expect(String(data: try encoder.encode(-Double.infinity), encoding: .utf8) == "\"-Inf\"")
     }
 
+    @Test func nonConformingFloatThrowStrategyCodingPath() async throws {
+        struct Nested: Codable {
+            struct Inner: Codable {
+                let value: Double
+            }
+            let values: [Double]
+            let inner: Inner
+        }
+
+        let encoder = TOONEncoder()
+        encoder.nonConformingFloatEncodingStrategy = .throw
+
+        do {
+            _ = try encoder.encode([1.0, Double.nan, 2.0])
+            #expect(Bool(false))
+        } catch EncodingError.invalidValue(_, let context) {
+            let path = context.codingPath.map(\.stringValue)
+            #expect(path == ["1"])
+        } catch {
+            #expect(Bool(false))
+        }
+
+        do {
+            _ = try encoder.encode(Nested(values: [1.0, 2.0], inner: .init(value: Double.infinity)))
+            #expect(Bool(false))
+        } catch EncodingError.invalidValue(_, let context) {
+            let path = context.codingPath.map(\.stringValue)
+            #expect(path == ["inner", "value"])
+        } catch {
+            #expect(Bool(false))
+        }
+    }
+
     @Test func booleans() async throws {
         #expect(String(data: try encoder.encode(true), encoding: .utf8) == "true")
         #expect(String(data: try encoder.encode(false), encoding: .utf8) == "false")
