@@ -5,55 +5,8 @@ import Foundation
 /// This encoder conforms to the TOON (Token-Oriented Object Notation) specification version 3.0.
 /// For more information, see https://github.com/toon-format/spec
 public final class TOONEncoder {
-
     /// The number of spaces per indentation level.
     public var indent: Int = 2
-
-    /// The delimiter to use for array values and tabular rows.
-    public var delimiter: Delimiter = .comma
-
-    /// Key folding mode for collapsing single-key object chains into dotted paths.
-    ///
-    /// When enabled, single-key nested objects like `{ a: { b: { c: 1 } } }`
-    /// are collapsed into `a.b.c: 1`. Only applies when all segments are valid identifiers.
-    ///
-    /// Example with `.safe`:
-    /// ```toon
-    /// user.profile.name: John
-    /// user.profile.age: 30
-    /// ```
-    public var keyFolding: KeyFolding = .disabled
-
-    /// The maximum number of segments to include in a folded path when `keyFolding` is `.safe`.
-    ///
-    /// Controls how many nested single-key objects are collapsed into a dotted path.
-    /// - Default is `Int.max` (unlimited folding depth).
-    /// - Values less than 2 have no practical folding effect.
-    ///
-    /// Example with `flattenDepth = 2`:
-    /// - Input: `{ a: { b: { c: { d: 1 } } } }`
-    /// - Output: `a.b:` followed by nested `c:` and `d: 1`
-    ///
-    /// Example with `flattenDepth = Int.max` (default):
-    /// - Input: `{ a: { b: { c: 1 } } }`
-    /// - Output: `a.b.c: 1`
-    public var flattenDepth: Int = .max
-
-    /// The maximum nesting depth allowed during encoding.
-    ///
-    /// - Default is 1000.
-    public var recursionLimit: Int = 1000
-
-    /// Key folding mode.
-    public enum KeyFolding: Hashable, Sendable {
-        /// No key folding.
-        case disabled
-
-        /// Safe key folding.
-        ///
-        /// Only folds when all segments are valid identifiers.
-        case safe
-    }
 
     /// The delimiter character used to separate array values and tabular row cells.
     ///
@@ -89,6 +42,74 @@ public final class TOONEncoder {
         case pipe = "|"
     }
 
+    /// The delimiter to use for array values and tabular rows.
+    public var delimiter: Delimiter = .comma
+
+    /// Key folding mode.
+    public enum KeyFolding: Hashable, Sendable {
+        /// No key folding.
+        case disabled
+
+        /// Safe key folding.
+        ///
+        /// Only folds when all segments are valid identifiers.
+        case safe
+    }
+
+    /// Key folding mode for collapsing single-key object chains into dotted paths.
+    ///
+    /// When enabled, single-key nested objects like `{ a: { b: { c: 1 } } }`
+    /// are collapsed into `a.b.c: 1`. Only applies when all segments are valid identifiers.
+    ///
+    /// Example with `.safe`:
+    /// ```toon
+    /// user.profile.name: John
+    /// user.profile.age: 30
+    /// ```
+    public var keyFolding: KeyFolding = .disabled
+
+    /// The maximum number of segments to include in a folded path when `keyFolding` is `.safe`.
+    ///
+    /// Controls how many nested single-key objects are collapsed into a dotted path.
+    /// - Default is `Int.max` (unlimited folding depth).
+    /// - Values less than 2 have no practical folding effect.
+    ///
+    /// Example with `flattenDepth = 2`:
+    /// - Input: `{ a: { b: { c: { d: 1 } } } }`
+    /// - Output: `a.b:` followed by nested `c:` and `d: 1`
+    ///
+    /// Example with `flattenDepth = Int.max` (default):
+    /// - Input: `{ a: { b: { c: 1 } } }`
+    /// - Output: `a.b.c: 1`
+    public var flattenDepth: Int = .max
+
+    /// Limits for encoding to prevent resource exhaustion.
+    public struct EncodingLimits: Hashable, Sendable {
+        /// Maximum nesting depth.
+        public var maxDepth: Int
+
+        /// Default limits suitable for most use cases.
+        ///
+        /// - `maxDepth`: 32 (prevents stack overflow from deep nesting)
+        public static let `default` = EncodingLimits(maxDepth: 32)
+
+        /// Encoding limits that impose no restrictions.
+        ///
+        /// - Warning: This configuration is unsafe for untrusted input
+        ///   and should only be used with trusted data.
+        public static let unlimited = EncodingLimits(maxDepth: .max)
+
+        public init(maxDepth: Int) {
+            self.maxDepth = maxDepth
+        }
+    }
+
+    /// Limits for encoding to prevent resource exhaustion.
+    ///
+    /// Use this to protect against accidental or malicious deep nesting
+    /// when encoding untrusted data.
+    public var limits: EncodingLimits = .default
+
     /// Creates a new TOON encoder with default configuration.
     ///
     /// Default settings:
@@ -96,6 +117,7 @@ public final class TOONEncoder {
     /// - `delimiter`: `.comma`
     /// - `keyFolding`: `.disabled`
     /// - `flattenDepth`: `Int.max`
+    /// - `limits`: `.default`
     public init() {}
 
     /// Encodes the given value into TOON format.
@@ -120,7 +142,7 @@ public final class TOONEncoder {
             v = .data(data)
         } else {
             var userInfo = [CodingUserInfoKey: Any]()
-            userInfo[.toonRecursionLimit] = recursionLimit
+            userInfo[.toonEncodingMaxDepth] = limits.maxDepth
             let encoder = Encoder(userInfo: userInfo)
             try value.encode(to: encoder)
             v = encoder.encodedValue
@@ -728,7 +750,7 @@ public final class TOONEncoder {
 }
 
 fileprivate extension CodingUserInfoKey {
-    static let toonRecursionLimit = CodingUserInfoKey(rawValue: "toonRecursionLimit")!
+    static let toonEncodingMaxDepth = CodingUserInfoKey(rawValue: "toonEncodingMaxDepth")!
 }
 
 // MARK: - Internal Encoder
@@ -880,11 +902,14 @@ extension TOONEncoder {
         }
 
         func encode<T: Encodable>(_ value: T, forKey key: Key) throws {
-            if let limit = encoder.userInfo[.toonRecursionLimit] as? Int, encoder.codingPath.count > limit {
-                throw EncodingError.invalidValue(value, EncodingError.Context(
-                    codingPath: codingPath + [key],
-                    debugDescription: "Recursion limit of \(limit) exceeded"
-                ))
+            if let limit = encoder.userInfo[.toonEncodingMaxDepth] as? Int, encoder.codingPath.count > limit {
+                throw EncodingError.invalidValue(
+                    value,
+                    EncodingError.Context(
+                        codingPath: codingPath + [key],
+                        debugDescription: "Recursion limit of \(limit) exceeded"
+                    )
+                )
             }
             trackKey(key.stringValue)
 
@@ -1163,11 +1188,14 @@ extension TOONEncoder {
         }
 
         func encode<T: Encodable>(_ value: T) throws {
-            if let limit = encoder.userInfo[.toonRecursionLimit] as? Int, encoder.codingPath.count > limit {
-                 throw EncodingError.invalidValue(value, EncodingError.Context(
-                     codingPath: codingPath + [IndexedCodingKey(intValue: count)],
-                     debugDescription: "Recursion limit of \(limit) exceeded"
-                 ))
+            if let limit = encoder.userInfo[.toonEncodingMaxDepth] as? Int, encoder.codingPath.count > limit {
+                throw EncodingError.invalidValue(
+                    value,
+                    EncodingError.Context(
+                        codingPath: codingPath + [IndexedCodingKey(intValue: count)],
+                        debugDescription: "Recursion limit of \(limit) exceeded"
+                    )
+                )
             }
             // Handle special types
             let mirror = Mirror(reflecting: value)
@@ -1311,11 +1339,14 @@ extension TOONEncoder {
         }
 
         func encode<T: Encodable>(_ value: T) throws {
-            if let limit = encoder.userInfo[.toonRecursionLimit] as? Int, encoder.codingPath.count > limit {
-                 throw EncodingError.invalidValue(value, EncodingError.Context(
-                     codingPath: codingPath,
-                     debugDescription: "Recursion limit of \(limit) exceeded"
-                 ))
+            if let limit = encoder.userInfo[.toonEncodingMaxDepth] as? Int, encoder.codingPath.count > limit {
+                throw EncodingError.invalidValue(
+                    value,
+                    EncodingError.Context(
+                        codingPath: codingPath,
+                        debugDescription: "Recursion limit of \(limit) exceeded"
+                    )
+                )
             }
             // Handle special types
             let mirror = Mirror(reflecting: value)

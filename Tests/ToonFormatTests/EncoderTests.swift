@@ -1591,7 +1591,7 @@ struct EncoderTests {
         }
 
         let encoder = TOONEncoder()
-        encoder.recursionLimit = 10
+        encoder.limits.maxDepth = 10
 
         do {
             _ = try encoder.encode(Container(value: makeDeepNest(depth: 20)))
