@@ -684,8 +684,8 @@ public final class TOONEncoder {
                     return "null"
                 case .throw:
                     preconditionFailure(
-                        "Encountered non-finite Double while nonConformingFloatEncodingStrategy is .throw. " +
-                        "This path should be unreachable because validation occurs earlier."
+                        "Encountered non-finite Double while nonConformingFloatEncodingStrategy is .throw. "
+                            + "This path should be unreachable because validation occurs earlier."
                     )
                 case .convertToString(let positiveInfinity, let negativeInfinity, let nan):
                     let literal: String
