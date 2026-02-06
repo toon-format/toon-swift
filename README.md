@@ -144,6 +144,10 @@ print(decoded.name) // "Ada"
 When encoding Swift `Dictionary` values, keys are sorted lexicographically.
 This helps ensure deterministic output while preserving semantics of encoded data structures.
 
+> [!NOTE]
+> Dictionary key ordering is best-effort and relies on a heuristic
+> that may change with Swift internals.
+
 ```swift
 struct ShoppingList: Codable {
     let name: String

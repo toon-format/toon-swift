@@ -323,7 +323,7 @@ struct EncoderTests {
         for iteration in 0 ..< 30 {
             var dictionary: [String: Int] = [:]
             let offset = iteration % count
-            let rotatedPairs = orderedPairs[offset...] + orderedPairs[..<offset]
+            let rotatedPairs = Array(orderedPairs[offset...]) + Array(orderedPairs[..<offset])
             for (key, value) in rotatedPairs {
                 dictionary[key] = value
             }
