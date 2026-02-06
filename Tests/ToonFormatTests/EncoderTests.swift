@@ -69,10 +69,28 @@ struct EncoderTests {
 
     @Test func specialNumericValues() async throws {
         #expect(String(data: try encoder.encode(-0.0), encoding: .utf8) == "0")
+        #expect(String(data: try encoder.encode(Double.nan), encoding: .utf8) == "null")
+        #expect(String(data: try encoder.encode(Double.infinity), encoding: .utf8) == "null")
+        #expect(String(data: try encoder.encode(-Double.infinity), encoding: .utf8) == "null")
         #expect(String(data: try encoder.encode(1e6), encoding: .utf8) == "1000000")
         #expect(String(data: try encoder.encode(1e-6), encoding: .utf8) == "0.000001")
         #expect(String(data: try encoder.encode(1e20), encoding: .utf8) == "100000000000000000000")
         #expect(String(data: try encoder.encode(Int64.max), encoding: .utf8) == "9223372036854775807")
+    }
+
+    @Test func preserveNegativeZero() async throws {
+        encoder.negativeZeroEncodingStrategy = .preserve
+        #expect(String(data: try encoder.encode(-0.0), encoding: .utf8) == "-0")
+    }
+
+    @Test func nonConformingFloatThrowStrategy() async throws {
+        encoder.nonConformingFloatEncodingStrategy = .throw
+        #expect(throws: EncodingError.self) {
+            _ = try encoder.encode(Double.nan)
+        }
+        #expect(throws: EncodingError.self) {
+            _ = try encoder.encode(Double.infinity)
+        }
     }
 
     @Test func booleans() async throws {

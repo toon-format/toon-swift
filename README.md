@@ -51,7 +51,7 @@ see the [TOON specification](https://github.com/toon-format/spec).
 `TOONEncoder` conforms to **TOON specification version 3.0** (2025-11-24)
 and implements the following features:
 
-- [x] Canonical number formatting (no trailing zeros, no leading zeros except `0`; `-0` normalized to `0`)
+- [x] Canonical number formatting (no trailing zeros, no leading zeros except `0`; `-0` normalized to `0` by default)
 - [x] Correct escape sequences for strings (`\\`, `\"`, `\n`, `\r`, `\t`)
 - [x] Three delimiter types: comma (default), tab, pipe
 - [x] Array length validation
@@ -175,6 +175,22 @@ Output with pipe delimiter:
 items[2|]{sku|name|qty|price}:
   A1|Widget|2|9.99
   B2|Gadget|1|14.5
+```
+
+#### Numeric Normalization
+
+`TOONEncoder` defaults to canonical normalization that matches the spec and the
+reference JavaScript implementation. You can override this behavior when you
+need to preserve negative zero or handle non-finite values explicitly.
+
+```swift
+let encoder = TOONEncoder()
+encoder.negativeZeroEncodingStrategy = .preserve
+encoder.nonConformingFloatEncodingStrategy = .convertToString(
+    positiveInfinity: "Infinity",
+    negativeInfinity: "-Infinity",
+    nan: "NaN"
+)
 ```
 
 #### Tabular Arrays
