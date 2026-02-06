@@ -45,6 +45,33 @@ public final class TOONEncoder {
     /// The delimiter to use for array values and tabular rows.
     public var delimiter: Delimiter = .comma
 
+    /// Strategy for encoding negative zero values.
+    public enum NegativeZeroEncodingStrategy: Hashable, Sendable {
+        /// Normalizes `-0.0` to `0`.
+        case normalize
+
+        /// Preserves `-0.0` as `-0`.
+        case preserve
+    }
+
+    /// The strategy to use for encoding negative zero values.
+    public var negativeZeroEncodingStrategy: NegativeZeroEncodingStrategy = .normalize
+
+    /// Strategy for encoding non-conforming floating-point values.
+    public enum NonConformingFloatEncodingStrategy: Hashable, Sendable {
+        /// Encodes non-finite values as `null`.
+        case null
+
+        /// Throws an error on non-finite values.
+        case `throw`
+
+        /// Encodes non-finite values as string literals.
+        case convertToString(positiveInfinity: String, negativeInfinity: String, nan: String)
+    }
+
+    /// The strategy to use for encoding non-conforming floating-point values.
+    public var nonConformingFloatEncodingStrategy: NonConformingFloatEncodingStrategy = .null
+
     /// Key folding mode.
     public enum KeyFolding: Hashable, Sendable {
         /// No key folding.
@@ -115,6 +142,8 @@ public final class TOONEncoder {
     /// Default settings:
     /// - `indent`: 2 spaces
     /// - `delimiter`: `.comma`
+    /// - `negativeZeroEncodingStrategy`: `.normalize`
+    /// - `nonConformingFloatEncodingStrategy`: `.null`
     /// - `keyFolding`: `.disabled`
     /// - `flattenDepth`: `Int.max`
     /// - `limits`: `.default`
@@ -146,6 +175,10 @@ public final class TOONEncoder {
             let encoder = Encoder(userInfo: userInfo)
             try value.encode(to: encoder)
             v = encoder.encodedValue
+        }
+
+        if case .throw = nonConformingFloatEncodingStrategy {
+            try validateNonConformingFloats(in: v, codingPath: [])
         }
 
         var output: [String] = []
@@ -646,12 +679,35 @@ public final class TOONEncoder {
         case .double(let doubleValue):
             // Check for non-finite numbers first
             if !doubleValue.isFinite {
-                return "null"
+                switch nonConformingFloatEncodingStrategy {
+                case .null:
+                    return "null"
+                case .throw:
+                    preconditionFailure(
+                        "Encountered non-finite Double while nonConformingFloatEncodingStrategy is .throw. "
+                            + "This path should be unreachable because validation occurs earlier."
+                    )
+                case .convertToString(let positiveInfinity, let negativeInfinity, let nan):
+                    let literal: String
+                    if doubleValue.isNaN {
+                        literal = nan
+                    } else if doubleValue.sign == .minus {
+                        literal = negativeInfinity
+                    } else {
+                        literal = positiveInfinity
+                    }
+                    return encodeStringLiteral(literal, delimiter: delimiter)
+                }
             }
 
             // Format numbers in decimal form without scientific notation
             if doubleValue == 0.0 && doubleValue.sign == .minus {
-                return "0"  // Convert -0 to 0
+                switch negativeZeroEncodingStrategy {
+                case .normalize:
+                    return "0"
+                case .preserve:
+                    return "-0"
+                }
             }
 
             if let formatted = numberFormatter.string(from: NSNumber(value: doubleValue)) {
@@ -674,6 +730,54 @@ public final class TOONEncoder {
             return encodeStringLiteral(base64, delimiter: delimiter)
         case .array, .object:
             return nil
+        }
+    }
+
+    private func validateNonConformingFloats(
+        in value: Value,
+        codingPath: [CodingKey]
+    ) throws {
+        struct ValidationCodingKey: CodingKey {
+            let stringValue: String
+            let intValue: Int?
+
+            init(stringValue: String) {
+                self.stringValue = stringValue
+                self.intValue = nil
+            }
+
+            init(intValue: Int) {
+                self.stringValue = String(intValue)
+                self.intValue = intValue
+            }
+        }
+
+        switch value {
+        case .double(let doubleValue):
+            guard doubleValue.isFinite else {
+                throw EncodingError.invalidValue(
+                    doubleValue,
+                    EncodingError.Context(
+                        codingPath: codingPath,
+                        debugDescription: "Non-conforming float value: \(doubleValue)"
+                    )
+                )
+            }
+        case .array(let array):
+            for (index, item) in array.enumerated() {
+                var nextPath = codingPath
+                nextPath.append(ValidationCodingKey(intValue: index))
+                try validateNonConformingFloats(in: item, codingPath: nextPath)
+            }
+        case .object(let values, let keyOrder):
+            for key in keyOrder {
+                guard let nestedValue = values[key] else { continue }
+                var nextPath = codingPath
+                nextPath.append(ValidationCodingKey(stringValue: key))
+                try validateNonConformingFloats(in: nestedValue, codingPath: nextPath)
+            }
+        case .null, .bool, .int, .string, .date, .url, .data:
+            break
         }
     }
 

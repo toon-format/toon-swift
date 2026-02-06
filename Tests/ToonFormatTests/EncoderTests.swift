@@ -69,10 +69,78 @@ struct EncoderTests {
 
     @Test func specialNumericValues() async throws {
         #expect(String(data: try encoder.encode(-0.0), encoding: .utf8) == "0")
+        #expect(String(data: try encoder.encode(Double.nan), encoding: .utf8) == "null")
+        #expect(String(data: try encoder.encode(Double.infinity), encoding: .utf8) == "null")
+        #expect(String(data: try encoder.encode(-Double.infinity), encoding: .utf8) == "null")
         #expect(String(data: try encoder.encode(1e6), encoding: .utf8) == "1000000")
         #expect(String(data: try encoder.encode(1e-6), encoding: .utf8) == "0.000001")
         #expect(String(data: try encoder.encode(1e20), encoding: .utf8) == "100000000000000000000")
         #expect(String(data: try encoder.encode(Int64.max), encoding: .utf8) == "9223372036854775807")
+    }
+
+    @Test func preserveNegativeZero() async throws {
+        let encoder = TOONEncoder()
+        encoder.negativeZeroEncodingStrategy = .preserve
+        #expect(String(data: try encoder.encode(-0.0), encoding: .utf8) == "-0")
+    }
+
+    @Test func nonConformingFloatThrowStrategy() async throws {
+        let encoder = TOONEncoder()
+        encoder.nonConformingFloatEncodingStrategy = .throw
+        #expect(throws: EncodingError.self) {
+            _ = try encoder.encode(Double.nan)
+        }
+        #expect(throws: EncodingError.self) {
+            _ = try encoder.encode(Double.infinity)
+        }
+        #expect(throws: EncodingError.self) {
+            _ = try encoder.encode(-Double.infinity)
+        }
+    }
+
+    @Test func nonConformingFloatConvertToStringStrategy() async throws {
+        let encoder = TOONEncoder()
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(
+            positiveInfinity: "Inf",
+            negativeInfinity: "-Inf",
+            nan: "NaN"
+        )
+        #expect(String(data: try encoder.encode(Double.nan), encoding: .utf8) == "NaN")
+        #expect(String(data: try encoder.encode(Double.infinity), encoding: .utf8) == "Inf")
+        #expect(String(data: try encoder.encode(-Double.infinity), encoding: .utf8) == "\"-Inf\"")
+    }
+
+    @Test func nonConformingFloatThrowStrategyCodingPath() async throws {
+        struct Nested: Codable {
+            struct Inner: Codable {
+                let value: Double
+            }
+            let values: [Double]
+            let inner: Inner
+        }
+
+        let encoder = TOONEncoder()
+        encoder.nonConformingFloatEncodingStrategy = .throw
+
+        do {
+            _ = try encoder.encode([1.0, Double.nan, 2.0])
+            #expect(Bool(false))
+        } catch EncodingError.invalidValue(_, let context) {
+            let path = context.codingPath.map(\.stringValue)
+            #expect(path == ["1"])
+        } catch {
+            #expect(Bool(false))
+        }
+
+        do {
+            _ = try encoder.encode(Nested(values: [1.0, 2.0], inner: .init(value: Double.infinity)))
+            #expect(Bool(false))
+        } catch EncodingError.invalidValue(_, let context) {
+            let path = context.codingPath.map(\.stringValue)
+            #expect(path == ["inner", "value"])
+        } catch {
+            #expect(Bool(false))
+        }
     }
 
     @Test func booleans() async throws {
