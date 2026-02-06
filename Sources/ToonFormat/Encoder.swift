@@ -810,6 +810,8 @@ extension TOONEncoder {
 
         private var container: [String: Value] = [:]
         private var keyOrder: [String] = []  // Track insertion order
+        // Swift Dictionary encoding uses an internal DictionaryCodingKey; detect it to sort keys deterministically.
+        private let isDictionaryCodingKey = String(reflecting: Key.self).contains("DictionaryCodingKey")
 
         init(encoder: Encoder, codingPath: [CodingKey]) {
             self.encoder = encoder
@@ -1095,12 +1097,14 @@ extension TOONEncoder {
         }
 
         func finishEncoding() {
-            encoder.storage.append(.object(container, keyOrder: keyOrder))
+            let finalKeyOrder = isDictionaryCodingKey ? container.keys.sorted() : keyOrder
+            encoder.storage.append(.object(container, keyOrder: finalKeyOrder))
         }
 
         deinit {
             // Ensure the container is finished when it goes out of scope
-            encoder.storage.append(.object(container, keyOrder: keyOrder))
+            let finalKeyOrder = isDictionaryCodingKey ? container.keys.sorted() : keyOrder
+            encoder.storage.append(.object(container, keyOrder: finalKeyOrder))
         }
     }
 }

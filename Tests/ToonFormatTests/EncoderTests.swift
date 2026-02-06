@@ -284,6 +284,57 @@ struct EncoderTests {
         #expect(quoteKeyResult.contains("\"he said \\\"hi\\\"\": 1"))
     }
 
+    @Test func dictionaryKeyOrderingIsDeterministic() async throws {
+        let orderedPairs: [(String, Int)] = [
+            ("alpha", 1),
+            ("bravo", 2),
+            ("charlie", 3),
+            ("delta", 4),
+            ("echo", 5),
+            ("foxtrot", 6),
+            ("golf", 7),
+            ("hotel", 8),
+            ("india", 9),
+            ("juliet", 10),
+            ("kilo", 11),
+            ("lima", 12),
+            ("mike", 13),
+            ("november", 14),
+            ("oscar", 15),
+            ("papa", 16),
+            ("quebec", 17),
+            ("romeo", 18),
+            ("sierra", 19),
+            ("tango", 20),
+            ("uniform", 21),
+            ("victor", 22),
+            ("whiskey", 23),
+            ("xray", 24),
+            ("yankee", 25),
+            ("zulu", 26),
+        ]
+        let expected =
+            orderedPairs
+            .sorted { $0.0 < $1.0 }
+            .map { "\($0.0): \($0.1)" }
+            .joined(separator: "\n")
+
+        let count = orderedPairs.count
+        for iteration in 0 ..< 30 {
+            var dictionary: [String: Int] = [:]
+
+            // Rotate the pairs to test different permutations
+            let offset = iteration % count
+            let rotatedPairs = orderedPairs[offset...] + orderedPairs[..<offset]
+            for (key, value) in rotatedPairs {
+                dictionary[key] = value
+            }
+
+            let result = String(data: try encoder.encode(dictionary), encoding: .utf8)!
+            #expect(result == expected)
+        }
+    }
+
     // MARK: - Nested Objects
 
     @Test func deepNestedObjects() async throws {

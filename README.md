@@ -64,6 +64,10 @@ and implements the following features:
 - [x] Configurable flatten depth to limit the depth of key folding
 - [x] Collision avoidance so folded keys never collide with existing sibling keys
 
+> [!NOTE]
+> `TOONEncoder` preserves the field order defined by `Encodable` types (the order keys are encoded).
+> When encoding Swift `Dictionary` values, keys are sorted to ensure a deterministic output.
+
 ### TOONDecoder
 
 `TOONDecoder` conforms to **TOON specification version 3.0** (2025-11-24)
