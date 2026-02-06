@@ -809,7 +809,30 @@ extension TOONEncoder {
         let codingPath: [any Swift.CodingKey]
 
         private var container: [String: Value] = [:]
-        private var keyOrder: [String] = []  // Track insertion order
+
+        private var keyOrder: [String] = []
+
+        /// Heuristic: Swift's `Dictionary` encoding uses an internal
+        /// `DictionaryCodingKey` type.
+        ///
+        /// We detect this by checking whether `String(reflecting: Key.self)`
+        /// is in the `Swift` module and contains the substring `"DictionaryCodingKey"`.
+        /// If so, we treat the container as a dictionary and sort its keys lexicographically.
+        ///
+        /// This relies on Swift's internal implementation details
+        /// and is therefore inherently fragile.
+        /// If the type name changes in a future Swift version,
+        /// this detection will stop working and dictionary key ordering may become
+        /// non-deterministic again without a compile-time error.
+        private let isDictionaryCodingKey: Bool = {
+            let reflected = String(reflecting: Key.self)
+            return reflected.hasPrefix("Swift.") && reflected.contains("DictionaryCodingKey")
+        }()
+        private var didFinishEncoding = false
+
+        private var finalKeyOrder: [String] {
+            isDictionaryCodingKey ? container.keys.sorted() : keyOrder
+        }
 
         init(encoder: Encoder, codingPath: [CodingKey]) {
             self.encoder = encoder
@@ -817,6 +840,7 @@ extension TOONEncoder {
         }
 
         private func trackKey(_ key: String) {
+            guard !isDictionaryCodingKey else { return }
             if !keyOrder.contains(key) {
                 keyOrder.append(key)
             }
@@ -1095,12 +1119,14 @@ extension TOONEncoder {
         }
 
         func finishEncoding() {
-            encoder.storage.append(.object(container, keyOrder: keyOrder))
+            guard !didFinishEncoding else { return }
+            didFinishEncoding = true
+            encoder.storage.append(.object(container, keyOrder: finalKeyOrder))
         }
 
         deinit {
             // Ensure the container is finished when it goes out of scope
-            encoder.storage.append(.object(container, keyOrder: keyOrder))
+            finishEncoding()
         }
     }
 }

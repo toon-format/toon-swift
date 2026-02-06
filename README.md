@@ -138,6 +138,37 @@ let decoded = try decoder.decode(User.self, from: data)
 print(decoded.name) // "Ada"
 ```
 
+#### Object Key Ordering
+
+`TOONEncoder` preserves the field order defined by `Encodable` types.
+When encoding Swift `Dictionary` values, keys are sorted lexicographically.
+This helps ensure deterministic output while preserving semantics of encoded data structures.
+
+> [!NOTE]
+> Dictionary key ordering is best-effort and relies on a heuristic
+> that may change with Swift internals.
+
+```swift
+struct ShoppingList: Codable {
+    let name: String
+    let itemsAndCounts: [String: Int]
+}
+
+let list = ShoppingList(
+    name: "Groceries",
+    itemsAndCounts: ["cherries": 3, "apple": 1, "banana": 2]
+)
+
+let encoder = TOONEncoder()
+let data = try encoder.encode(list)
+print(String(data: data, encoding: .utf8)!)
+// name: Groceries    /* name comes first because it is declared first in the struct */
+// itemsAndCounts:
+//   apple: 1         /* keys in dictionary are sorted */
+//   banana: 2
+//   cherries: 3
+```
+
 #### Custom Delimiters
 
 Use tab or pipe delimiters for additional token savings:

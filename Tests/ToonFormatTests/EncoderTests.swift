@@ -284,6 +284,178 @@ struct EncoderTests {
         #expect(quoteKeyResult.contains("\"he said \\\"hi\\\"\": 1"))
     }
 
+    @Test func dictionaryKeyOrderingIsDeterministic() async throws {
+        let orderedPairs: [(String, Int)] = [
+            ("alpha", 1),
+            ("bravo", 2),
+            ("charlie", 3),
+            ("delta", 4),
+            ("echo", 5),
+            ("foxtrot", 6),
+            ("golf", 7),
+            ("hotel", 8),
+            ("india", 9),
+            ("juliet", 10),
+            ("kilo", 11),
+            ("lima", 12),
+            ("mike", 13),
+            ("november", 14),
+            ("oscar", 15),
+            ("papa", 16),
+            ("quebec", 17),
+            ("romeo", 18),
+            ("sierra", 19),
+            ("tango", 20),
+            ("uniform", 21),
+            ("victor", 22),
+            ("whiskey", 23),
+            ("xray", 24),
+            ("yankee", 25),
+            ("zulu", 26),
+        ]
+        let expected =
+            orderedPairs
+            .sorted { $0.0 < $1.0 }
+            .map { "\($0.0): \($0.1)" }
+            .joined(separator: "\n")
+
+        let count = orderedPairs.count
+        for iteration in 0 ..< 30 {
+            var dictionary: [String: Int] = [:]
+            let offset = iteration % count
+            let rotatedPairs = Array(orderedPairs[offset...]) + Array(orderedPairs[..<offset])
+            for (key, value) in rotatedPairs {
+                dictionary[key] = value
+            }
+
+            let result = String(data: try encoder.encode(dictionary), encoding: .utf8)!
+            #expect(result == expected)
+        }
+    }
+
+    @Test func dictionaryCodingKeyReflectionIsStable() async throws {
+        final class DictionaryKeyProbeEncoder: Encoder {
+            var codingPath: [CodingKey] = []
+            var userInfo: [CodingUserInfoKey: Any] = [:]
+            var keyTypeName: String?
+
+            func container<Key>(keyedBy type: Key.Type) -> KeyedEncodingContainer<Key>
+            where Key: CodingKey {
+                keyTypeName = String(reflecting: Key.self)
+                return KeyedEncodingContainer(ProbeKeyedContainer<Key>())
+            }
+
+            func unkeyedContainer() -> UnkeyedEncodingContainer {
+                return ProbeUnkeyedContainer()
+            }
+
+            func singleValueContainer() -> SingleValueEncodingContainer {
+                return ProbeSingleValueContainer()
+            }
+        }
+
+        struct ProbeKeyedContainer<Key: CodingKey>: KeyedEncodingContainerProtocol {
+            var codingPath: [CodingKey] = []
+
+            mutating func encodeNil(forKey key: Key) throws {}
+            mutating func encode(_ value: Bool, forKey key: Key) throws {}
+            mutating func encode(_ value: String, forKey key: Key) throws {}
+            mutating func encode(_ value: Double, forKey key: Key) throws {}
+            mutating func encode(_ value: Float, forKey key: Key) throws {}
+            mutating func encode(_ value: Int, forKey key: Key) throws {}
+            mutating func encode(_ value: Int8, forKey key: Key) throws {}
+            mutating func encode(_ value: Int16, forKey key: Key) throws {}
+            mutating func encode(_ value: Int32, forKey key: Key) throws {}
+            mutating func encode(_ value: Int64, forKey key: Key) throws {}
+            mutating func encode(_ value: UInt, forKey key: Key) throws {}
+            mutating func encode(_ value: UInt8, forKey key: Key) throws {}
+            mutating func encode(_ value: UInt16, forKey key: Key) throws {}
+            mutating func encode(_ value: UInt32, forKey key: Key) throws {}
+            mutating func encode(_ value: UInt64, forKey key: Key) throws {}
+            mutating func encode<T: Encodable>(_ value: T, forKey key: Key) throws {}
+
+            mutating func nestedContainer<NestedKey>(
+                keyedBy keyType: NestedKey.Type,
+                forKey key: Key
+            ) -> KeyedEncodingContainer<NestedKey> where NestedKey: CodingKey {
+                return KeyedEncodingContainer(ProbeKeyedContainer<NestedKey>())
+            }
+
+            mutating func nestedUnkeyedContainer(forKey key: Key) -> UnkeyedEncodingContainer {
+                return ProbeUnkeyedContainer()
+            }
+
+            mutating func superEncoder() -> Encoder {
+                return DictionaryKeyProbeEncoder()
+            }
+
+            mutating func superEncoder(forKey key: Key) -> Encoder {
+                return DictionaryKeyProbeEncoder()
+            }
+        }
+
+        struct ProbeUnkeyedContainer: UnkeyedEncodingContainer {
+            var codingPath: [CodingKey] = []
+            var count: Int = 0
+
+            mutating func encodeNil() throws { count += 1 }
+            mutating func encode(_ value: Bool) throws { count += 1 }
+            mutating func encode(_ value: String) throws { count += 1 }
+            mutating func encode(_ value: Double) throws { count += 1 }
+            mutating func encode(_ value: Float) throws { count += 1 }
+            mutating func encode(_ value: Int) throws { count += 1 }
+            mutating func encode(_ value: Int8) throws { count += 1 }
+            mutating func encode(_ value: Int16) throws { count += 1 }
+            mutating func encode(_ value: Int32) throws { count += 1 }
+            mutating func encode(_ value: Int64) throws { count += 1 }
+            mutating func encode(_ value: UInt) throws { count += 1 }
+            mutating func encode(_ value: UInt8) throws { count += 1 }
+            mutating func encode(_ value: UInt16) throws { count += 1 }
+            mutating func encode(_ value: UInt32) throws { count += 1 }
+            mutating func encode(_ value: UInt64) throws { count += 1 }
+            mutating func encode<T: Encodable>(_ value: T) throws { count += 1 }
+
+            mutating func nestedContainer<NestedKey>(
+                keyedBy keyType: NestedKey.Type
+            ) -> KeyedEncodingContainer<NestedKey> where NestedKey: CodingKey {
+                return KeyedEncodingContainer(ProbeKeyedContainer<NestedKey>())
+            }
+
+            mutating func nestedUnkeyedContainer() -> UnkeyedEncodingContainer {
+                return ProbeUnkeyedContainer()
+            }
+
+            mutating func superEncoder() -> Encoder {
+                return DictionaryKeyProbeEncoder()
+            }
+        }
+
+        struct ProbeSingleValueContainer: SingleValueEncodingContainer {
+            var codingPath: [CodingKey] = []
+
+            mutating func encodeNil() throws {}
+            mutating func encode(_ value: Bool) throws {}
+            mutating func encode(_ value: String) throws {}
+            mutating func encode(_ value: Double) throws {}
+            mutating func encode(_ value: Float) throws {}
+            mutating func encode(_ value: Int) throws {}
+            mutating func encode(_ value: Int8) throws {}
+            mutating func encode(_ value: Int16) throws {}
+            mutating func encode(_ value: Int32) throws {}
+            mutating func encode(_ value: Int64) throws {}
+            mutating func encode(_ value: UInt) throws {}
+            mutating func encode(_ value: UInt8) throws {}
+            mutating func encode(_ value: UInt16) throws {}
+            mutating func encode(_ value: UInt32) throws {}
+            mutating func encode(_ value: UInt64) throws {}
+            mutating func encode<T: Encodable>(_ value: T) throws {}
+        }
+
+        let encoder = DictionaryKeyProbeEncoder()
+        try ["a": 1, "b": 2].encode(to: encoder)
+        #expect(encoder.keyTypeName?.contains("DictionaryCodingKey") == true)
+    }
+
     // MARK: - Nested Objects
 
     @Test func deepNestedObjects() async throws {
