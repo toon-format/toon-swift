@@ -184,7 +184,7 @@ enum Value: Equatable {
             var object: [String: Value] = [:]
             // Sort keys to ensure deterministic order
             let sortedKeys = dictionaryValue.keys.sorted()
-            
+
             for key in sortedKeys {
                 let value = dictionaryValue[key]!
                 object[key] = Value.from(value)
