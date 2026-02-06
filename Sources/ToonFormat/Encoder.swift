@@ -178,7 +178,7 @@ public final class TOONEncoder {
         }
 
         if case .throw = nonConformingFloatEncodingStrategy {
-            try validateNonConformingFloats(in: v)
+            try validateNonConformingFloats(in: v, codingPath: [])
         }
 
         var output: [String] = []
@@ -683,7 +683,10 @@ public final class TOONEncoder {
                 case .null:
                     return "null"
                 case .throw:
-                    return "null"
+                    preconditionFailure(
+                        "Encountered non-finite Double while nonConformingFloatEncodingStrategy is .throw. " +
+                        "This path should be unreachable because validation occurs earlier."
+                    )
                 case .convertToString(let positiveInfinity, let negativeInfinity, let nan):
                     let literal: String
                     if doubleValue.isNaN {
@@ -730,26 +733,48 @@ public final class TOONEncoder {
         }
     }
 
-    private func validateNonConformingFloats(in value: Value) throws {
+    private func validateNonConformingFloats(
+        in value: Value,
+        codingPath: [CodingKey]
+    ) throws {
+        struct ValidationCodingKey: CodingKey {
+            let stringValue: String
+            let intValue: Int?
+
+            init(stringValue: String) {
+                self.stringValue = stringValue
+                self.intValue = nil
+            }
+
+            init(intValue: Int) {
+                self.stringValue = String(intValue)
+                self.intValue = intValue
+            }
+        }
+
         switch value {
         case .double(let doubleValue):
             guard doubleValue.isFinite else {
                 throw EncodingError.invalidValue(
                     doubleValue,
                     EncodingError.Context(
-                        codingPath: [],
+                        codingPath: codingPath,
                         debugDescription: "Non-conforming float value: \(doubleValue)"
                     )
                 )
             }
         case .array(let array):
-            for item in array {
-                try validateNonConformingFloats(in: item)
+            for (index, item) in array.enumerated() {
+                var nextPath = codingPath
+                nextPath.append(ValidationCodingKey(intValue: index))
+                try validateNonConformingFloats(in: item, codingPath: nextPath)
             }
         case .object(let values, let keyOrder):
             for key in keyOrder {
                 guard let nestedValue = values[key] else { continue }
-                try validateNonConformingFloats(in: nestedValue)
+                var nextPath = codingPath
+                nextPath.append(ValidationCodingKey(stringValue: key))
+                try validateNonConformingFloats(in: nestedValue, codingPath: nextPath)
             }
         case .null, .bool, .int, .string, .date, .url, .data:
             break

@@ -79,11 +79,13 @@ struct EncoderTests {
     }
 
     @Test func preserveNegativeZero() async throws {
+        let encoder = TOONEncoder()
         encoder.negativeZeroEncodingStrategy = .preserve
         #expect(String(data: try encoder.encode(-0.0), encoding: .utf8) == "-0")
     }
 
     @Test func nonConformingFloatThrowStrategy() async throws {
+        let encoder = TOONEncoder()
         encoder.nonConformingFloatEncodingStrategy = .throw
         #expect(throws: EncodingError.self) {
             _ = try encoder.encode(Double.nan)
@@ -91,6 +93,21 @@ struct EncoderTests {
         #expect(throws: EncodingError.self) {
             _ = try encoder.encode(Double.infinity)
         }
+        #expect(throws: EncodingError.self) {
+            _ = try encoder.encode(-Double.infinity)
+        }
+    }
+
+    @Test func nonConformingFloatConvertToStringStrategy() async throws {
+        let encoder = TOONEncoder()
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(
+            positiveInfinity: "Inf",
+            negativeInfinity: "-Inf",
+            nan: "NaN"
+        )
+        #expect(String(data: try encoder.encode(Double.nan), encoding: .utf8) == "\"NaN\"")
+        #expect(String(data: try encoder.encode(Double.infinity), encoding: .utf8) == "\"Inf\"")
+        #expect(String(data: try encoder.encode(-Double.infinity), encoding: .utf8) == "\"-Inf\"")
     }
 
     @Test func booleans() async throws {
