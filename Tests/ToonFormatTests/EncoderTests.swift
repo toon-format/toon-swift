@@ -1572,6 +1572,37 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @Test func recursionLimitTriggersOnDeepEncoding() async throws {
+        indirect enum NestableValue: Codable, Equatable {
+            case int(Int)
+            case array([NestableValue])
+        }
+
+        struct Container: Codable, Equatable {
+            let value: NestableValue
+        }
+
+        func makeDeepNest(depth: Int) -> NestableValue {
+            var value: NestableValue = .int(1)
+            for _ in 0 ..< depth {
+                value = .array([value])
+            }
+            return value
+        }
+
+        let encoder = TOONEncoder()
+        encoder.limits.maxDepth = 10
+
+        do {
+            _ = try encoder.encode(Container(value: makeDeepNest(depth: 20)))
+            #expect(Bool(false))
+        } catch EncodingError.invalidValue(_, let context) {
+            #expect(context.debugDescription.contains("Recursion limit"))
+        } catch {
+            #expect(Bool(false))
+        }
+    }
+
     // MARK: - Collision Avoidance Tests (TOON 3.0)
 
     @Test func keyFoldingCollisionAvoidance() async throws {

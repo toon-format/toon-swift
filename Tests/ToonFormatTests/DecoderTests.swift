@@ -1368,7 +1368,7 @@ struct DecoderTests {
             let value: Int8
         }
 
-        let toon = "value: 200"  // Exceeds Int8.max (127)
+        let toon = "value: 128"  // Int8.max + 1
         let data = toon.data(using: .utf8)!
 
         #expect(throws: TOONDecodingError.self) {
@@ -1394,7 +1394,7 @@ struct DecoderTests {
             let value: UInt8
         }
 
-        let toon = "value: 300"  // Exceeds UInt8.max (255)
+        let toon = "value: 256"  // UInt8.max + 1
         let data = toon.data(using: .utf8)!
 
         #expect(throws: TOONDecodingError.self) {
