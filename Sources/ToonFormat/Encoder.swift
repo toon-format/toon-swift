@@ -809,7 +809,26 @@ extension TOONEncoder {
         let codingPath: [any Swift.CodingKey]
 
         private var container: [String: Value] = [:]
-        private var keyOrder: [String] = []  // Track insertion order
+
+        private var keyOrder: [String] = []
+
+        /// Heuristic: Swift's `Dictionary` encoding uses an internal
+        /// `DictionaryCodingKey` type.
+        ///
+        /// We detect this by checking whether `String(reflecting: Key.self)`
+        /// contains the substring `"DictionaryCodingKey"`, and if so,
+        /// we treat the container as a dictionary and sort its keys lexicographically.
+        ///
+        /// This relies on Swift's internal implementation details
+        /// and is therefore inherently fragile.
+        /// If the type name changes in a future Swift version,
+        /// this detection will stop working and dictionary key ordering may become
+        /// non-deterministic again without a compile-time error.
+        private let isDictionaryCodingKey = String(reflecting: Key.self).contains("DictionaryCodingKey")
+
+        private var finalKeyOrder: [String] {
+            isDictionaryCodingKey ? container.keys.sorted() : keyOrder
+        }
 
         init(encoder: Encoder, codingPath: [CodingKey]) {
             self.encoder = encoder
@@ -1095,12 +1114,12 @@ extension TOONEncoder {
         }
 
         func finishEncoding() {
-            encoder.storage.append(.object(container, keyOrder: keyOrder))
+            encoder.storage.append(.object(container, keyOrder: finalKeyOrder))
         }
 
         deinit {
             // Ensure the container is finished when it goes out of scope
-            encoder.storage.append(.object(container, keyOrder: keyOrder))
+            encoder.storage.append(.object(container, keyOrder: finalKeyOrder))
         }
     }
 }
