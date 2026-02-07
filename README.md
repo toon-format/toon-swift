@@ -63,6 +63,7 @@ and implements the following features:
 - [x] Key folding to collapse single-key object chains into dotted paths
 - [x] Configurable flatten depth to limit the depth of key folding
 - [x] Collision avoidance so folded keys never collide with existing sibling keys
+- [x] Configurable encoding limits for security
 
 ### TOONDecoder
 
@@ -315,6 +316,21 @@ database.connection:
   port: 5432
 ```
 
+### Encoding Limits
+
+Protect against stack overflow from deeply nested structures:
+
+```swift
+let encoder = TOONEncoder()
+encoder.limits = TOONEncoder.EncodingLimits(maxDepth: 64)
+```
+
+| Limit | Default | Description |
+|-------|---------|-------------|
+| `maxDepth` | 32 | Maximum nesting depth |
+
+Use `.unlimited` for trusted data only.
+
 ### Decoding Limits
 
 Protect against malicious or malformed input:
@@ -328,6 +344,15 @@ decoder.limits = TOONDecoder.DecodingLimits(
     maxArrayLength: 10000
 )
 ```
+
+| Limit | Default | Description |
+|-------|---------|-------------|
+| `maxInputSize` | 10 MB | Maximum input size in bytes |
+| `maxDepth` | 32 | Maximum nesting depth |
+| `maxObjectKeys` | 10,000 | Maximum keys per object |
+| `maxArrayLength` | 100,000 | Maximum elements per array |
+
+Use `.unlimited` for trusted data only.
 
 ### Version Information
 
