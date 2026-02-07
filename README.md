@@ -342,6 +342,15 @@ decoder.limits = TOONDecoder.DecodingLimits(
 )
 ```
 
+| Limit | Default | Description |
+|-------|---------|-------------|
+| `maxInputSize` | 10 MB | Maximum input size in bytes |
+| `maxDepth` | 32 | Maximum nesting depth |
+| `maxObjectKeys` | 10,000 | Maximum keys per object |
+| `maxArrayLength` | 100,000 | Maximum elements per array |
+
+Use `.unlimited` for trusted data only.
+
 ### Version Information
 
 Check the supported TOON specification version:
