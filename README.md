@@ -325,7 +325,10 @@ let encoder = TOONEncoder()
 encoder.limits = TOONEncoder.EncodingLimits(maxDepth: 64)
 ```
 
-The default `maxDepth` is 32. 
+| Limit | Default | Description |
+|-------|---------|-------------|
+| `maxDepth` | 32 | Maximum nesting depth |
+
 Use `.unlimited` for trusted data only.
 
 ### Decoding Limits
