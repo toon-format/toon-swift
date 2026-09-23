@@ -24,7 +24,8 @@ let package = Package(
         ),
         .testTarget(
             name: "ToonFormatTests",
-            dependencies: ["ToonFormat"]
+            dependencies: ["ToonFormat"],
+            resources: [.copy("Fixtures")]
         ),
     ]
 )

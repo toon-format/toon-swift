@@ -585,7 +585,7 @@ struct EncoderTests {
 
         let emptyObj = EmptyArrayObject(items: [])
         let emptyResult = String(data: try encoder.encode(emptyObj), encoding: .utf8)!
-        #expect(emptyResult.contains("items[0]:"))
+        #expect(emptyResult.contains("items: []"))
     }
 
     @Test func emptyStringInArrays() async throws {
@@ -815,10 +815,11 @@ struct EncoderTests {
         ])
         let nestedResult = String(data: try encoder.encode(nestedObj), encoding: .utf8)!
 
-        #expect(nestedResult.contains("items[1]:"))
-        #expect(nestedResult.contains("  - id: 1"))
-        #expect(nestedResult.contains("    nested:"))
-        #expect(nestedResult.contains("      x: \"1\""))
+        // Specification 9.3 collapses a uniform nested-object column into a
+        // nested field group, and section 9.3 makes the tabular form
+        // mandatory wherever detection succeeds. The rows stay flat, so the
+        // cell for nested.x sits beside the cell for id.
+        #expect(nestedResult == "items[1]{id,nested{x}}:\n  1,\"1\"")
     }
 
     @Test func listFormatForDifferentFields() async throws {
@@ -951,7 +952,7 @@ struct EncoderTests {
         )!
         #expect(emptyArrayInObjectResult.contains("items[1]:"))
         #expect(emptyArrayInObjectResult.contains("  - name: test"))
-        #expect(emptyArrayInObjectResult.contains("    data[0]:"))
+        #expect(emptyArrayInObjectResult.contains("    data: []"))
     }
 
     @Test func nestedTabularArraysFirstFieldOnHyphenLine() async throws {
@@ -1002,9 +1003,10 @@ struct EncoderTests {
             data: try encoder.encode(emptyArrayFirstObj),
             encoding: .utf8
         )!
-        #expect(emptyArrayFirstResult.contains("items[1]:"))
-        #expect(emptyArrayFirstResult.contains("  - data[0]:"))
-        #expect(emptyArrayFirstResult.contains("    name: x"))
+        // Specification 9.1 gives an empty array the canonical form `key: []`
+        // wherever it sits at a field, the hyphen line included. The `[0]:`
+        // form stays only for an inner array of section 9.2, which has no key.
+        #expect(emptyArrayFirstResult == "items[1]:\n  - data: []\n    name: x")
     }
 
     @Test func listFormatWithArrayOfArrays() async throws {
@@ -1147,6 +1149,47 @@ struct EncoderTests {
         #expect(mixedLengthResult.contains("  - [2]: \"2\",\"3\""))
     }
 
+    /// A list-item object whose first field holds an array of arrays must
+    /// write every element of that array.
+    ///
+    /// The branch that writes the array used to skip an element that is not
+    /// primitive. The header still declared the full length, so the output
+    /// held fewer rows than it promised, and the decoder rejected it.
+    @Test func innerArrayOfObjectsInAListItemFieldSurvives() async throws {
+        let document = TOONValue.array([
+            .object(TOONObject([("a", .array([.int(1), .array([.object(TOONObject([("x", .int(1))]))])]))]))
+        ])
+
+        let result = String(data: try encoder.encode(document), encoding: .utf8)!
+
+        let expected = """
+            [1]:
+              - a[2]:
+                  - 1
+                  - [1]:
+                    - x: 1
+            """
+        #expect(result == expected)
+
+        let decoded = try TOONDecoder().decode(TOONValue.self, from: Data(result.utf8))
+        #expect(decoded == document)
+    }
+
+    /// An indentation size below one is a mistake, not a crash.
+    ///
+    /// A size of zero wrote every line at the left margin, so the output no
+    /// longer held the structure. A negative size trapped inside
+    /// `String(repeating:count:)` and stopped the host process.
+    @Test func anIndentSizeBelowOneIsAnError() async throws {
+        for size in [0, -1] {
+            let encoder = TOONEncoder()
+            encoder.indentSize = size
+            #expect(throws: (any Error).self) {
+                try encoder.encode(["a": ["b": 1]])
+            }
+        }
+    }
+
     // MARK: - Root Arrays
 
     @Test func rootPrimitiveArray() async throws {
@@ -1209,7 +1252,7 @@ struct EncoderTests {
     @Test func rootEmptyArray() async throws {
         let emptyArray: [String] = []
         let emptyResult = String(data: try encoder.encode(emptyArray), encoding: .utf8)!
-        #expect(emptyResult.contains("[0]:"))
+        #expect(emptyResult.contains("[]"))
     }
 
     @Test func rootArrayOfArrays() async throws {
@@ -1250,7 +1293,7 @@ struct EncoderTests {
         #expect(result.contains("  name: Ada"))
         #expect(result.contains("  tags[2]: reading,gaming"))
         #expect(result.contains("  active: true"))
-        #expect(result.contains("  prefs[0]:"))
+        #expect(result.contains("  prefs: []"))
     }
 
     // MARK: - Delimiter Options
@@ -1487,6 +1530,7 @@ struct EncoderTests {
 
     // MARK: - Whitespace and Formatting Invariants
 
+    @available(*, deprecated)
     @Test func noTrailingSpaces() async throws {
         struct WhitespaceTestObject: Codable {
             struct User: Codable {
@@ -1509,6 +1553,7 @@ struct EncoderTests {
         }
     }
 
+    @available(*, deprecated)
     @Test func noTrailingNewline() async throws {
         struct WhitespaceTestObject: Codable {
             struct User: Codable {
@@ -1537,6 +1582,7 @@ struct EncoderTests {
 
     // MARK: - Key Folding Tests (TOON 2.1+)
 
+    @available(*, deprecated)
     @Test func keyFoldingDisabled() async throws {
         struct NestedObject: Codable {
             struct User: Codable {
@@ -1562,6 +1608,7 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @available(*, deprecated)
     @Test func keyFoldingSafe() async throws {
         struct NestedObject: Codable {
             struct User: Codable {
@@ -1585,6 +1632,7 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @available(*, deprecated)
     @Test func keyFoldingWithMultipleFields() async throws {
         struct Config: Codable {
             struct Database: Codable {
@@ -1619,6 +1667,7 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @available(*, deprecated)
     @Test func keyFoldingStopsAtInvalidIdentifier() async throws {
         // Keys with hyphens cannot be folded
         struct ValidThenInvalid: Codable {
@@ -1654,6 +1703,7 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @available(*, deprecated)
     @Test func keyFoldingWithArray() async throws {
         struct Container: Codable {
             struct Wrapper: Codable {
@@ -1674,10 +1724,12 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @available(*, deprecated)
     @Test func versionDeclaration() async throws {
-        #expect(toonSpecVersion == "3.0")
+        #expect(toonSpecVersion == "4.1")
     }
 
+    @available(*, deprecated)
     @Test func canonicalNumberFormat() async throws {
         // TOON specification requires canonical decimal form: no trailing fractional zeros
         struct Numbers: Codable {
@@ -1701,6 +1753,7 @@ struct EncoderTests {
 
     // MARK: - flattenDepth Tests (TOON 3.0)
 
+    @available(*, deprecated)
     @Test func flattenDepthUnlimited() async throws {
         struct DeepNested: Codable {
             struct Level1: Codable {
@@ -1729,6 +1782,7 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @available(*, deprecated)
     @Test func flattenDepthLimited() async throws {
         struct DeepNested: Codable {
             struct Level1: Codable {
@@ -1759,6 +1813,7 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @available(*, deprecated)
     @Test func flattenDepthThree() async throws {
         struct DeepNested: Codable {
             struct Level1: Codable {
@@ -1788,6 +1843,7 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @available(*, deprecated)
     @Test func flattenDepthOne() async throws {
         // flattenDepth < 2 has no practical folding effect
         struct NestedObject: Codable {
@@ -1812,6 +1868,7 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @available(*, deprecated)
     @Test func recursionLimitTriggersOnDeepEncoding() async throws {
         indirect enum NestableValue: Codable, Equatable {
             case int(Int)
@@ -1845,6 +1902,7 @@ struct EncoderTests {
 
     // MARK: - Collision Avoidance Tests (TOON 3.0)
 
+    @available(*, deprecated)
     @Test func keyFoldingCollisionAvoidance() async throws {
         // Test that folding doesn't create keys that collide with existing siblings
         // The key "a.b" is a literal sibling key, and folding "a" -> {b: 1} would create "a.b"
@@ -1879,6 +1937,7 @@ struct EncoderTests {
         #expect(result == expected)
     }
 
+    @available(*, deprecated)
     @Test func keyFoldingNoCollision() async throws {
         // Test normal folding when there's no collision
         struct NoCollision: Codable {

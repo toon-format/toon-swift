@@ -194,6 +194,7 @@ struct RoundTripTests {
         #expect(original2 == decoded2)
     }
 
+    @available(*, deprecated)
     @Test func roundTripTabDelimiter() async throws {
         struct DelimiterObject: Codable, Equatable {
             let tags: [String]
@@ -208,6 +209,7 @@ struct RoundTripTests {
         #expect(original == decoded)
     }
 
+    @available(*, deprecated)
     @Test func roundTripPipeDelimiter() async throws {
         struct DelimiterObject: Codable, Equatable {
             let tags: [String]
@@ -222,6 +224,7 @@ struct RoundTripTests {
         #expect(original == decoded)
     }
 
+    @available(*, deprecated)
     @Test func roundTripKeyFolding() async throws {
         struct NestedObject: Codable, Equatable {
             struct User: Codable, Equatable {

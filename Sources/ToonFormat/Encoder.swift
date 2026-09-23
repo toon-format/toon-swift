@@ -2,11 +2,26 @@ import Foundation
 
 /// An encoder that converts Swift values into TOON format.
 ///
-/// This encoder conforms to the TOON (Token-Oriented Object Notation) specification version 3.0.
+/// This encoder conforms to the TOON (Token-Oriented Object Notation) specification version 4.1.
 /// For more information, see https://github.com/toon-format/spec
 public final class TOONEncoder {
-    /// The number of spaces per indentation level.
-    public var indent: Int = 2
+    /// The number of spaces of one indentation level.
+    ///
+    /// TOON specification 13 names this option `indentSize`, with a default
+    /// of 2. Section 13.1 is the conformance checklist of an encoder, and
+    /// defines no option.
+    public var indentSize: Int = 2
+
+    /// The former name of ``indentSize``.
+    ///
+    /// The specification took the name `indentSize` in release 3.3. The
+    /// compatibility note of release 4.1 lets an implementation keep the old
+    /// name as a deprecated alias.
+    @available(*, deprecated, renamed: "indentSize")
+    public var indent: Int {
+        get { indentSize }
+        set { indentSize = newValue }
+    }
 
     /// The delimiter character used to separate array values and tabular row cells.
     ///
@@ -93,7 +108,23 @@ public final class TOONEncoder {
     /// user.profile.name: John
     /// user.profile.age: 30
     /// ```
-    public var keyFolding: KeyFolding = .disabled
+    @available(
+        *,
+        deprecated,
+        message: """
+            TOON specification 4.0 removed key folding. The option still \
+            works, and stays off by default, but its output does not conform \
+            to specification 4.1. It is removed in 2.0.
+            """
+    )
+    public var keyFolding: KeyFolding {
+        get { storedKeyFolding }
+        set { storedKeyFolding = newValue }
+    }
+
+    /// Backing storage, so that the library can read the option without
+    /// raising its own deprecation warning.
+    private var storedKeyFolding: KeyFolding = .disabled
 
     /// The maximum number of segments to include in a folded path when `keyFolding` is `.safe`.
     ///
@@ -108,7 +139,22 @@ public final class TOONEncoder {
     /// Example with `flattenDepth = Int.max` (default):
     /// - Input: `{ a: { b: { c: 1 } } }`
     /// - Output: `a.b.c: 1`
-    public var flattenDepth: Int = .max
+    @available(
+        *,
+        deprecated,
+        message: """
+            TOON specification 4.0 removed key folding, which is the only \
+            thing this option affects. It is removed in 2.0.
+            """
+    )
+    public var flattenDepth: Int {
+        get { storedFlattenDepth }
+        set { storedFlattenDepth = newValue }
+    }
+
+    /// Backing storage, so that the library can read the option without
+    /// raising its own deprecation warning.
+    private var storedFlattenDepth: Int = .max
 
     /// Limits for encoding to prevent resource exhaustion.
     public struct EncodingLimits: Hashable, Sendable {
@@ -140,7 +186,7 @@ public final class TOONEncoder {
     /// Creates a new TOON encoder with default configuration.
     ///
     /// Default settings:
-    /// - `indent`: 2 spaces
+    /// - `indentSize`: 2 spaces
     /// - `delimiter`: `.comma`
     /// - `negativeZeroEncodingStrategy`: `.normalize`
     /// - `nonConformingFloatEncodingStrategy`: `.null`
@@ -159,6 +205,8 @@ public final class TOONEncoder {
     /// standard Swift types and custom `Encodable` types. Arrays of objects with consistent
     /// keys are automatically formatted as tabular data.
     public func encode<T: Encodable>(_ value: T) throws -> Data {
+        try validateIndentSize()
+
         // Handle special types before they encode themselves
         let mirror = Mirror(reflecting: value)
         let v: Value
@@ -184,8 +232,10 @@ public final class TOONEncoder {
         var output: [String] = []
         encodeValue(v, output: &output, depth: 0)
 
-        let result = output.joined(separator: "\n")
-        return result.data(using: .utf8) ?? Data()
+        // Data(_:) takes the UTF-8 view of a native String, which always
+        // exists. The earlier data(using:) returned an optional, and the
+        // fallback would have given an empty document for a whole encode.
+        return Data(output.joined(separator: "\n").utf8)
     }
 
     // MARK: - Encoding Entry Point
@@ -203,28 +253,55 @@ public final class TOONEncoder {
         case .array(let array):
             encodeArray(key: nil, array: array, output: &output, depth: depth)
 
-        case .object(let values, let keyOrder):
-            encodeObject(values, keyOrder: keyOrder, output: &output, depth: depth)
+        case .object(let values):
+            // At the root the keyed header carries no key (specification 9.5).
+            if depth == 0, let header = detectKeyedTabularHeader(values) {
+                encodeKeyedTabular(
+                    key: nil,
+                    values: values,
+                    header: header,
+                    output: &output,
+                    depth: depth
+                )
+            } else {
+                encodeObject(values, output: &output, depth: depth)
+            }
         }
+    }
+
+    /// Rejects an indentation size that the encoder cannot use.
+    ///
+    /// A size below one gives no indentation. A nested value then lands at the
+    /// depth of its parent, and the output no longer holds the structure. A
+    /// negative size traps in `String(repeating:count:)`. The encoder reports
+    /// the mistake instead.
+    private func validateIndentSize() throws {
+        guard indentSize < 1 else { return }
+        throw EncodingError.invalidValue(
+            indentSize,
+            EncodingError.Context(
+                codingPath: [],
+                debugDescription: "The indentation size must be one or more, not \(indentSize)."
+            )
+        )
     }
 
     // MARK: - Object Encoding
 
     private func encodeObject(
-        _ values: [String: Value],
-        keyOrder: [String],
+        _ values: ObjectStorage,
         output: inout [String],
         depth: Int,
         allowFolding: Bool = true
     ) {
-        for key in keyOrder {
-            guard let value = values[key] else { continue }
+        let siblingKeys = values.keys
+        for element in values {
             encodeKeyValuePair(
-                key: key,
-                value: value,
+                key: element.key,
+                value: element.value,
                 output: &output,
                 depth: depth,
-                siblingKeys: keyOrder,
+                siblingKeys: siblingKeys,
                 allowFolding: allowFolding
             )
         }
@@ -244,23 +321,23 @@ public final class TOONEncoder {
         value: Value,
         siblingKeys: [String] = []
     ) -> (path: String, value: Value, hitDepthLimit: Bool)? {
-        guard keyFolding == .safe else { return nil }
+        guard storedKeyFolding == .safe else { return nil }
 
         // Values less than 2 have no practical folding effect
-        guard flattenDepth >= 2 else { return nil }
+        guard storedFlattenDepth >= 2 else { return nil }
 
         var pathComponents: [String] = [key]
         var currentValue = value
         var hitDepthLimit = false
 
         // Follow the chain of single-key objects, respecting flattenDepth limit
-        while case .object(let nestedValues, let nestedKeyOrder) = currentValue,
-            nestedKeyOrder.count == 1,
-            let singleKey = nestedKeyOrder.first,
-            let nextValue = nestedValues[singleKey]
+        while case .object(let nestedValues) = currentValue,
+            nestedValues.count == 1,
+            let single = nestedValues.first
         {
+            let singleKey = single.key
             // Stop if we've reached the flattenDepth limit
-            guard pathComponents.count < flattenDepth else {
+            guard pathComponents.count < storedFlattenDepth else {
                 hitDepthLimit = true
                 break
             }
@@ -271,7 +348,7 @@ public final class TOONEncoder {
             }
 
             pathComponents.append(singleKey)
-            currentValue = nextValue
+            currentValue = single.value
         }
 
         // Only fold if we found at least one nested level
@@ -284,8 +361,11 @@ public final class TOONEncoder {
 
         let foldedPath = pathComponents.joined(separator: ".")
 
-        // Collision avoidance: folded key must not equal any existing sibling key
-        if siblingKeys.contains(foldedPath) {
+        // Collision avoidance: a folded key must not equal an existing
+        // sibling key. A folded path holds ASCII identifier segments only, so
+        // the scalar-exact comparison of section 16 never differs from the
+        // canonical one here.
+        if siblingKeys.containsKey(foldedPath) {
             return nil
         }
 
@@ -315,12 +395,11 @@ public final class TOONEncoder {
             case .array(let array):
                 encodeArray(key: path, array: array, output: &output, depth: depth)
 
-            case .object(let values, let keyOrder):
+            case .object(let values):
                 write(depth: depth, content: "\(encodedKey):", to: &output)
-                if !keyOrder.isEmpty {
+                if !values.isEmpty {
                     encodeObject(
                         values,
-                        keyOrder: keyOrder,
                         output: &output,
                         depth: depth + 1,
                         allowFolding: !hitDepthLimit
@@ -342,31 +421,40 @@ public final class TOONEncoder {
         case .array(let array):
             encodeArray(key: key, array: array, output: &output, depth: depth)
 
-        case .object(let values, let keyOrder):
-            if keyOrder.isEmpty {
+        case .object(let values):
+            if values.isEmpty {
                 write(depth: depth, content: "\(encodedKey):", to: &output)
+            } else if let header = detectKeyedTabularHeader(values) {
+                // Specification 9.5 makes the keyed tabular form mandatory in
+                // object-field position wherever detection succeeds.
+                encodeKeyedTabular(
+                    key: key,
+                    values: values,
+                    header: header,
+                    output: &output,
+                    depth: depth
+                )
             } else {
                 write(depth: depth, content: "\(encodedKey):", to: &output)
-                encodeObject(values, keyOrder: keyOrder, output: &output, depth: depth + 1)
+                encodeObject(values, output: &output, depth: depth + 1)
             }
         }
     }
 
     private func encodeObjectAsListItem(
-        values: [String: Value],
-        keyOrder: [String],
+        values: ObjectStorage,
         output: inout [String],
         depth: Int
     ) {
-        if keyOrder.isEmpty {
+        guard let first = values.first else {
             write(depth: depth, content: "-", to: &output)
             return
         }
 
         // First key-value on the same line as "- "
-        let firstKey = keyOrder[0]
+        let firstKey = first.key
         let encodedKey = encodeKey(firstKey)
-        let firstValue = values[firstKey]!
+        let firstValue = first.value
 
         switch firstValue {
         case .null, .bool, .int, .double, .string, .date, .url, .data:
@@ -399,7 +487,7 @@ public final class TOONEncoder {
                         content: "- \(headerStr)",
                         to: &output
                     )
-                    writeTabularRows(rows: array, header: header, output: &output, depth: depth + 1)
+                    writeTabularRows(rows: array, header: header, output: &output, depth: depth + 2)
                 } else {
                     write(
                         depth: depth,
@@ -407,12 +495,11 @@ public final class TOONEncoder {
                         to: &output
                     )
                     for item in array {
-                        if let (values, keyOrder) = item.objectValue {
+                        if let values = item.objectValue {
                             encodeObjectAsListItem(
                                 values: values,
-                                keyOrder: keyOrder,
                                 output: &output,
-                                depth: depth + 1
+                                depth: depth + 2
                             )
                         }
                     }
@@ -432,58 +519,76 @@ public final class TOONEncoder {
                             inObject: false
                         ) {
                             write(
-                                depth: depth + 1,
+                                depth: depth + 2,
                                 content: "- \(encoded)",
                                 to: &output
                             )
                         }
                     case .array(let innerArray):
-                        if innerArray.allSatisfy({ $0.isPrimitive }) {
-                            let inline = formatInlineArray(values: innerArray, key: nil)
-                            write(
-                                depth: depth + 1,
-                                content: "- \(inline)",
-                                to: &output
-                            )
-                        }
-                    case .object(let innerValues, let innerKeyOrder):
+                        encodeInnerArrayAsListItem(
+                            innerArray,
+                            output: &output,
+                            depth: depth + 2
+                        )
+                    case .object(let innerValues):
                         encodeObjectAsListItem(
                             values: innerValues,
-                            keyOrder: innerKeyOrder,
                             output: &output,
-                            depth: depth + 1
+                            depth: depth + 2
                         )
                     }
                 }
             }
 
-        case .object(let nestedValues, let nestedKeyOrder):
-            if nestedKeyOrder.isEmpty {
+        case .object(let nestedValues):
+            if nestedValues.isEmpty {
                 write(depth: depth, content: "- \(encodedKey):", to: &output)
+            } else if let header = detectKeyedTabularHeader(nestedValues) {
+                // Specification 10 lets a keyed header sit on the hyphen line.
+                // Its entry rows go two levels below that line, which puts the
+                // sibling fields one level above them.
+                var headerStr = encodeKey(firstKey)
+                let delimiterSuffix = delimiter.rawValue != "," ? delimiter.rawValue : ""
+                headerStr += "[\(nestedValues.count):\(delimiterSuffix)]"
+                headerStr += "{\(formatFieldList(header, delimiter: delimiter.rawValue))}:"
+                write(depth: depth, content: "- \(headerStr)", to: &output)
+
+                for entry in nestedValues {
+                    let cells = collectRowLeaves(entry.value, fields: header)
+                    let row = joinEncodedValues(cells, delimiter: delimiter.rawValue)
+                    write(
+                        depth: depth + 2,
+                        content: "\(encodeKey(entry.key)): \(row)",
+                        to: &output
+                    )
+                }
             } else {
                 write(depth: depth, content: "- \(encodedKey):", to: &output)
-                encodeObject(nestedValues, keyOrder: nestedKeyOrder, output: &output, depth: depth + 2)
+                encodeObject(nestedValues, output: &output, depth: depth + 2)
             }
         }
 
         // Remaining keys on indented lines
-        for i in 1 ..< keyOrder.count {
-            let key = keyOrder[i]
-            guard let value = values[key] else { continue }
-            encodeKeyValuePair(key: key, value: value, output: &output, depth: depth + 1, siblingKeys: keyOrder)
+        let siblingKeys = values.keys
+        for element in values.dropFirst() {
+            encodeKeyValuePair(
+                key: element.key,
+                value: element.value,
+                output: &output,
+                depth: depth + 1,
+                siblingKeys: siblingKeys
+            )
         }
     }
 
     // MARK: - Array Encoding
 
     private func encodeArray(key: String?, array: [Value], output: inout [String], depth: Int) {
+        // Specification 9.1 gives an empty array the canonical form `key: []`
+        // at a field and `[]` at the root.
         if array.isEmpty {
-            let header = formatHeader(
-                length: 0,
-                key: key,
-                delimiter: delimiter.rawValue
-            )
-            write(depth: depth, content: header, to: &output)
+            let line = key.map { "\(encodeKey($0)): []" } ?? "[]"
+            write(depth: depth, content: line, to: &output)
             return
         }
 
@@ -555,7 +660,7 @@ public final class TOONEncoder {
 
         for arrayValue in values {
             guard let innerArray = arrayValue.arrayValue else { continue }
-            let inline = formatInlineArray(values: innerArray, key: nil)
+            let inline = formatInlineArray(values: innerArray, key: nil, inListItem: true)
             write(depth: depth + 1, content: "- \(inline)", to: &output)
         }
     }
@@ -563,7 +668,7 @@ public final class TOONEncoder {
     private func encodeArrayOfObjectsAsTabular(
         key: String?,
         rows: [Value],
-        header: [String],
+        header: [FieldNode],
         output: inout [String],
         depth: Int
     ) {
@@ -576,6 +681,41 @@ public final class TOONEncoder {
         write(depth: depth, content: headerStr, to: &output)
 
         writeTabularRows(rows: rows, header: header, output: &output, depth: depth + 1)
+    }
+
+    /// Writes an inner array that sits on a hyphen line.
+    ///
+    /// Specification 6 allows a keyless header to carry a field list only at
+    /// the document root. An inner array that the tabular form would fit
+    /// therefore takes the list form here.
+    private func encodeInnerArrayAsListItem(_ array: [Value], output: inout [String], depth: Int) {
+        if array.allSatisfy({ $0.isPrimitive }) {
+            let inline = formatInlineArray(values: array, key: nil, inListItem: true)
+            write(depth: depth, content: "- \(inline)", to: &output)
+            return
+        }
+
+        write(depth: depth, content: "- [\(array.count)]:", to: &output)
+        for item in array {
+            switch item {
+            case .null, .bool, .int, .double, .string, .date, .url, .data:
+                if let encoded = encodePrimitive(
+                    item,
+                    delimiter: delimiter.rawValue,
+                    inObject: false
+                ) {
+                    write(depth: depth + 1, content: "- \(encoded)", to: &output)
+                }
+            case .array(let inner):
+                encodeInnerArrayAsListItem(inner, output: &output, depth: depth + 1)
+            case .object(let values):
+                encodeObjectAsListItem(
+                    values: values,
+                    output: &output,
+                    depth: depth + 1
+                )
+            }
+        }
     }
 
     private func encodeMixedArrayAsListItems(
@@ -599,19 +739,11 @@ public final class TOONEncoder {
                 }
 
             case .array(let array):
-                if array.allSatisfy({ $0.isPrimitive }) {
-                    let inline = formatInlineArray(values: array, key: nil)
-                    write(
-                        depth: depth + 1,
-                        content: "- \(inline)",
-                        to: &output
-                    )
-                }
+                encodeInnerArrayAsListItem(array, output: &output, depth: depth + 1)
 
-            case .object(let values, let keyOrder):
+            case .object(let values):
                 encodeObjectAsListItem(
                     values: values,
-                    keyOrder: keyOrder,
                     output: &output,
                     depth: depth + 1
                 )
@@ -621,45 +753,114 @@ public final class TOONEncoder {
 
     // MARK: - Tabular Encoding
 
-    private func detectTabularHeader(_ rows: [Value]) -> [String]? {
-        guard let (_, keyOrder) = rows.first?.objectValue else { return nil }
-        if keyOrder.isEmpty { return nil }
-
-        if isTabularArray(rows: rows, header: keyOrder) {
-            return keyOrder
-        }
-        return nil
-    }
-
-    private func isTabularArray(rows: [Value], header: [String]) -> Bool {
-        for rowValue in rows {
-            guard let (values, keyOrder) = rowValue.objectValue else { return false }
-
-            // All objects must have the same keys (but order can differ)
-            if keyOrder.count != header.count {
-                return false
-            }
-
-            // Check that all header keys exist in the row and all values are primitives
-            for key in header {
-                guard let value = values[key] else { return false }
-                if !value.isPrimitive {
-                    return false
-                }
-            }
+    /// The field list for an array of uniform objects, or `nil` when the
+    /// array does not take the tabular form.
+    ///
+    /// TOON specification 9.3 requires every column - the values at one key
+    /// across the rows - to be uniform-primitive or nested-uniform. A
+    /// nested-uniform column collapses into a nested field group, and the
+    /// rule applies again inside it, with no depth cap.
+    ///
+    /// An array that holds an empty object never takes the tabular form,
+    /// because an empty object has no column to describe.
+    private func detectTabularHeader(_ rows: [Value]) -> [FieldNode]? {
+        guard let firstRow = rows.first?.objectValue, !firstRow.isEmpty else {
+            return nil
         }
 
-        return true
+        // Every row is an object with the same set of keys. The order inside a
+        // row may differ; the header order wins, per section 9.3.
+        let headerKeys = firstRow.keys
+        for row in rows {
+            guard let values = row.objectValue, values.count == headerKeys.count else {
+                return nil
+            }
+            for key in headerKeys where values[key] == nil {
+                return nil
+            }
+        }
+
+        var fields: [FieldNode] = []
+        for key in headerKeys {
+            let column = rows.compactMap { $0.objectValue?[key] }
+            if column.allSatisfy({ $0.isPrimitive }) {
+                fields.append(FieldNode(name: key))
+            } else if let children = detectTabularHeader(column) {
+                fields.append(FieldNode(name: key, children: children))
+            } else {
+                return nil
+            }
+        }
+
+        return fields
     }
 
-    private func writeTabularRows(rows: [Value], header: [String], output: inout [String], depth: Int) {
-        for rowValue in rows {
-            guard let (values, _) = rowValue.objectValue else { continue }
-            let rowValues = header.compactMap { key in values[key] }
-            let joinedValue = joinEncodedValues(
-                rowValues,
-                delimiter: delimiter.rawValue
-            )
+    /// The field list for an object that takes the keyed tabular form, or
+    /// `nil` when it does not.
+    ///
+    /// TOON specification 9.5 requires at least two entries, and every entry
+    /// value to be a non-empty object. The columns then follow the rules of
+    /// section 9.3, so the detection reuses ``detectTabularHeader``.
+    private func detectKeyedTabularHeader(_ values: ObjectStorage) -> [FieldNode]? {
+        guard values.count >= 2 else { return nil }
+
+        let entries = values.values
+        guard entries.allSatisfy({ $0.isObject }) else {
+            return nil
+        }
+
+        return detectTabularHeader(entries)
+    }
+
+    /// Writes a keyed tabular scope: the header, then one row per entry.
+    private func encodeKeyedTabular(
+        key: String?,
+        values: ObjectStorage,
+        header: [FieldNode],
+        output: inout [String],
+        depth: Int
+    ) {
+        var headerStr = ""
+        if let key = key {
+            headerStr += encodeKey(key)
+        }
+        let delimiterSuffix = delimiter.rawValue != "," ? delimiter.rawValue : ""
+        headerStr += "[\(values.count):\(delimiterSuffix)]"
+        headerStr += "{\(formatFieldList(header, delimiter: delimiter.rawValue))}:"
+        write(depth: depth, content: headerStr, to: &output)
+
+        for entry in values {
+            let cells = collectRowLeaves(entry.value, fields: header)
+            let row = joinEncodedValues(cells, delimiter: delimiter.rawValue)
+            write(depth: depth + 1, content: "\(encodeKey(entry.key)): \(row)", to: &output)
+        }
+    }
+
+    /// The cells of one row, in the depth-first order of the leaves.
+    private func collectRowLeaves(_ row: Value, fields: [FieldNode]) -> [Value] {
+        guard let values = row.objectValue else { return [] }
+
+        var cells: [Value] = []
+        for field in fields {
+            guard let value = values[field.name] else { continue }
+            if let children = field.children {
+                cells.append(contentsOf: collectRowLeaves(value, fields: children))
+            } else {
+                cells.append(value)
+            }
+        }
+        return cells
+    }
+
+    private func writeTabularRows(
+        rows: [Value],
+        header: [FieldNode],
+        output: inout [String],
+        depth: Int
+    ) {
+        for row in rows {
+            let cells = collectRowLeaves(row, fields: header)
+            let joinedValue = joinEncodedValues(cells, delimiter: delimiter.rawValue)
             write(depth: depth, content: joinedValue, to: &output)
         }
     }
@@ -710,12 +911,7 @@ public final class TOONEncoder {
                 }
             }
 
-            if let formatted = numberFormatter.string(from: NSNumber(value: doubleValue)) {
-                return formatted
-            }
-
-            // Fallback to string representation
-            return String(doubleValue)
+            return canonicalDecimal(doubleValue)
         case .string(let stringValue):
             return encodeStringLiteral(stringValue, delimiter: delimiter)
         case .date(let date):
@@ -769,12 +965,11 @@ public final class TOONEncoder {
                 nextPath.append(ValidationCodingKey(intValue: index))
                 try validateNonConformingFloats(in: item, codingPath: nextPath)
             }
-        case .object(let values, let keyOrder):
-            for key in keyOrder {
-                guard let nestedValue = values[key] else { continue }
+        case .object(let values):
+            for element in values {
                 var nextPath = codingPath
-                nextPath.append(ValidationCodingKey(stringValue: key))
-                try validateNonConformingFloats(in: nestedValue, codingPath: nextPath)
+                nextPath.append(ValidationCodingKey(stringValue: element.key))
+                try validateNonConformingFloats(in: element.value, codingPath: nextPath)
             }
         case .null, .bool, .int, .string, .date, .url, .data:
             break
@@ -801,24 +996,54 @@ public final class TOONEncoder {
 
     // MARK: - Formatting Helpers
 
-    private func formatInlineArray(values: [Value], key: String?) -> String {
+    /// Renders an inline array.
+    ///
+    /// - Parameter inListItem: `true` when the array is an inner array on a
+    ///   hyphen line. Specification 9.2 keeps the `[0]:` form there, while
+    ///   section 9.1 gives every other position the canonical empty form.
+    private func formatInlineArray(
+        values: [Value],
+        key: String?,
+        inListItem: Bool = false
+    ) -> String {
+        // Specification 9.1 gives an empty array the canonical form `key: []`
+        // at a field and `[]` at the root. The old `key[0]:` form is still
+        // accepted on decode, but an encoder must not emit it.
+        if values.isEmpty, !inListItem {
+            guard let key = key else { return "[]" }
+            return "\(encodeKey(key)): []"
+        }
+
         let header = formatHeader(
             length: values.count,
             key: key,
             delimiter: delimiter.rawValue
         )
-        let joinedValue = joinEncodedValues(values, delimiter: delimiter.rawValue)
 
         if values.isEmpty {
             return header
         }
+
+        let joinedValue = joinEncodedValues(values, delimiter: delimiter.rawValue)
         return "\(header) \(joinedValue)"
+    }
+
+    /// Renders a field list, and recurses into a nested field group.
+    ///
+    /// A name follows the key encoding of specification 7.3 at every level.
+    private func formatFieldList(_ fields: [FieldNode], delimiter: String) -> String {
+        fields.map { field in
+            guard let children = field.children else { return encodeKey(field.name) }
+            let inner = formatFieldList(children, delimiter: delimiter)
+            return "\(encodeKey(field.name)){\(inner)}"
+        }
+        .joined(separator: delimiter)
     }
 
     private func formatHeader(
         length: Int,
         key: String? = nil,
-        fields: [String]? = nil,
+        fields: [FieldNode]? = nil,
         delimiter: String = ","
     ) -> String {
         var header = ""
@@ -832,8 +1057,7 @@ public final class TOONEncoder {
         header += "[\(length)\(delimiterSuffix)]"
 
         if let fields = fields {
-            let quotedFields = fields.map { encodeKey($0) }
-            header += "{\(quotedFields.joined(separator: delimiter))}"
+            header += "{\(formatFieldList(fields, delimiter: delimiter))}"
         }
 
         header += ":"
@@ -848,7 +1072,7 @@ public final class TOONEncoder {
     }
 
     private func write(depth: Int, content: String, to output: inout [String]) {
-        let indentation = String(repeating: String(repeating: " ", count: indent), count: depth)
+        let indentation = String(repeating: String(repeating: " ", count: indentSize), count: depth)
         output.append(indentation + content)
     }
 }
@@ -912,9 +1136,7 @@ extension TOONEncoder {
         let encoder: Encoder
         let codingPath: [any Swift.CodingKey]
 
-        private var container: [String: Value] = [:]
-
-        private var keyOrder: [String] = []
+        private var container: ObjectStorage = [:]
 
         /// Heuristic: Swift's `Dictionary` encoding uses an internal
         /// `DictionaryCodingKey` type.
@@ -934,94 +1156,68 @@ extension TOONEncoder {
         }()
         private var didFinishEncoding = false
 
-        private var finalKeyOrder: [String] {
-            isDictionaryCodingKey ? container.keys.sorted() : keyOrder
-        }
-
         init(encoder: Encoder, codingPath: [CodingKey]) {
             self.encoder = encoder
             self.codingPath = codingPath
         }
 
-        private func trackKey(_ key: String) {
-            guard !isDictionaryCodingKey else { return }
-            if !keyOrder.contains(key) {
-                keyOrder.append(key)
-            }
-        }
-
         func encodeNil(forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .null
         }
 
         func encode(_ value: Bool, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .bool(value)
         }
 
         func encode(_ value: String, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .string(value)
         }
 
         func encode(_ value: Double, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .double(value)
         }
 
         func encode(_ value: Float, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .double(Double(value))
         }
 
         func encode(_ value: Int, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .int(Int64(value))
         }
 
         func encode(_ value: Int8, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .int(Int64(value))
         }
 
         func encode(_ value: Int16, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .int(Int64(value))
         }
 
         func encode(_ value: Int32, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .int(Int64(value))
         }
 
         func encode(_ value: Int64, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .int(value)
         }
 
         func encode(_ value: UInt, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .int(Int64(value))
         }
 
         func encode(_ value: UInt8, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .int(Int64(value))
         }
 
         func encode(_ value: UInt16, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .int(Int64(value))
         }
 
         func encode(_ value: UInt32, forKey key: Key) throws {
-            trackKey(key.stringValue)
             container[key.stringValue] = .int(Int64(value))
         }
 
         func encode(_ value: UInt64, forKey key: Key) throws {
-            trackKey(key.stringValue)
             if value <= Int64.max {
                 container[key.stringValue] = .int(Int64(value))
             } else {
@@ -1039,7 +1235,6 @@ extension TOONEncoder {
                     )
                 )
             }
-            trackKey(key.stringValue)
 
             // Handle special types by checking the mirror of the value
             // We need to use the Mirror because Date, URL, and Data conform to Codable
@@ -1225,7 +1420,7 @@ extension TOONEncoder {
         func finishEncoding() {
             guard !didFinishEncoding else { return }
             didFinishEncoding = true
-            encoder.storage.append(.object(container, keyOrder: finalKeyOrder))
+            encoder.storage.append(.object(isDictionaryCodingKey ? container.sortedByKey() : container))
         }
 
         deinit {
@@ -1506,45 +1701,130 @@ extension TOONEncoder {
     }
 }
 
-// MARK: - Number Formatter
+// MARK: - Number Formatting
 
-// Shared number formatter that's used to avoid scientific notation
-// and format numbers in canonical decimal form (no trailing zeros)
-private let numberFormatter: NumberFormatter = {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .decimal
-    formatter.usesGroupingSeparator = false
-    formatter.maximumFractionDigits = 15
-    formatter.minimumFractionDigits = 0  // Prevents trailing zeros
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    return formatter
-}()
+/// Renders a finite `Double` in the canonical decimal form of TOON
+/// specification 2.
+///
+/// The description of a `Double` in Swift is the shortest text that reads back
+/// as the same value. Section 2 asks for exactly that: an encoder must emit
+/// enough precision that decoding its output returns the input. The earlier
+/// code used a NumberFormatter capped at 15 fraction digits. That cap rounded
+/// 0.3333333333333333 to fifteen threes, and turned 1e-16 into 0.
+///
+/// Swift writes a whole value as "1.0" and uses an exponent outside a range of
+/// its own, so the two cases are adjusted here. Section 2 asks for a plain
+/// decimal inside one band of magnitudes. The band holds zero, and every
+/// magnitude from 1e-6 up to 1e21. Outside it, the exponent form is allowed.
+private func canonicalDecimal(_ value: Double) -> String {
+    let magnitude = abs(value)
+    let usesPlainForm = magnitude == 0 || (magnitude >= 1e-6 && magnitude < 1e21)
+
+    guard usesPlainForm else {
+        // Outside the band, section 2 allows the exponent form. The description
+        // of a Double is already the shortest text that reads back as the same
+        // value.
+        return String(value)
+    }
+
+    // The shortest fixed-point text that reads back as the same value. Trying
+    // the digits in order means the result never carries a trailing zero.
+    for digits in 0 ... 25 {
+        let text = String(format: "%.\(digits)f", value)
+        if Double(text) == value {
+            return text
+        }
+    }
+
+    return String(value)
+}
 
 // MARK: - String Extensions
 
 private extension String {
+    /// Escapes a string for a quoted span, per TOON specification 7.1.
+    ///
+    /// The table has five short forms. Every other character in U+0000 through
+    /// U+001F takes the `\uXXXX` form, which the specification requires.
     var escaped: String {
-        return
-            replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .replacingOccurrences(of: "\r", with: "\\r")
-            .replacingOccurrences(of: "\t", with: "\\t")
+        var result = String.UnicodeScalarView()
+        for scalar in unicodeScalars {
+            switch scalar {
+            case "\\": result.append(contentsOf: "\\\\".unicodeScalars)
+            case "\"": result.append(contentsOf: "\\\"".unicodeScalars)
+            case "\n": result.append(contentsOf: "\\n".unicodeScalars)
+            case "\r": result.append(contentsOf: "\\r".unicodeScalars)
+            case "\t": result.append(contentsOf: "\\t".unicodeScalars)
+            default:
+                if scalar.value <= 0x1F {
+                    let hex = String(format: "%04x", scalar.value)
+                    result.append(contentsOf: "\\u\(hex)".unicodeScalars)
+                } else {
+                    result.append(scalar)
+                }
+            }
+        }
+        return String(result)
     }
 
+    /// Whether the string matches `^[+-]?[0-9]+(\.[0-9]+)?(e[+-]?[0-9]+)?$`
+    /// with ASCII digits, per specification 7.2.
+    ///
+    /// This is wider than the decoder grammar of section 4: it also covers
+    /// `+1` and `05`, which decode as strings. An encoder quotes them so that
+    /// the value cannot read as a number.
     var isNumericLike: Bool {
-        // Match numbers like: 42, -3.14, 1e-6, 05, etc.
-        return range(
-            of: #"^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$"#,
-            options: [.regularExpression, .caseInsensitive]
-        ) != nil
-            || range(of: #"^0\d+$"#, options: .regularExpression) != nil
+        let scalars = Array(unicodeScalars)
+        var index = 0
+
+        if index < scalars.count, scalars[index] == "+" || scalars[index] == "-" {
+            index += 1
+        }
+
+        let integerStart = index
+        while index < scalars.count, scalars[index].isASCIIDigit {
+            index += 1
+        }
+        guard index > integerStart else { return false }
+
+        if index < scalars.count, scalars[index] == "." {
+            index += 1
+            let fractionStart = index
+            while index < scalars.count, scalars[index].isASCIIDigit {
+                index += 1
+            }
+            guard index > fractionStart else { return false }
+        }
+
+        if index < scalars.count, scalars[index] == "e" || scalars[index] == "E" {
+            index += 1
+            if index < scalars.count, scalars[index] == "+" || scalars[index] == "-" {
+                index += 1
+            }
+            let exponentStart = index
+            while index < scalars.count, scalars[index].isASCIIDigit {
+                index += 1
+            }
+            guard index > exponentStart else { return false }
+        }
+
+        return index == scalars.count
     }
 
+    /// Whether the string starts or ends with U+0020 or U+0009.
+    ///
+    /// Specification 7.2 names exactly those two. CharacterSet.whitespaces
+    /// also holds every Unicode space separator, and section 12 states that
+    /// such a character is part of the token.
     var isPaddedWithWhitespace: Bool {
-        return self != trimmingCharacters(in: .whitespaces)
+        guard let first = unicodeScalars.first, let last = unicodeScalars.last else {
+            return false
+        }
+        let isPad = { (scalar: Unicode.Scalar) in scalar == " " || scalar == "\t" }
+        return isPad(first) || isPad(last)
     }
 
+    /// Whether the string may appear without quotes, per specification 7.2.
     func isSafeUnquoted(delimiter: String = ",") -> Bool {
         if isEmpty {
             return false
@@ -1562,49 +1842,68 @@ private extension String {
             return false
         }
 
-        // Check for colon (always structural)
-        if contains(":") {
-            return false
+        for scalar in unicodeScalars {
+            switch scalar {
+            case ":", "\"", "\\", "[", "]", "{", "}":
+                return false
+            default:
+                if scalar.value <= 0x1F {
+                    return false
+                }
+            }
         }
 
-        // Check for quotes and backslash (always need escaping)
-        if contains("\"") || contains("\\") {
-            return false
-        }
-
-        // Check for brackets and braces (always structural)
-        if range(of: #"[\[\]{}]"#, options: .regularExpression) != nil {
-            return false
-        }
-
-        // Check for control characters (newline, carriage return, tab - always need quoting/escaping)
-        if range(of: #"[\n\r\t]"#, options: .regularExpression) != nil {
-            return false
-        }
-
-        // Check for the active delimiter
         if contains(delimiter) {
             return false
         }
 
-        // Check for hyphen at start (list marker)
-        if hasPrefix("-") {
+        // A hyphen at position 0 reads as the list marker, and a number sign
+        // at position 0 reads as a comment line (section 5.1).
+        if hasPrefix("-") || hasPrefix("#") {
+            return false
+        }
+
+        // Stricter than the specification, which obliges only a decoder to
+        // strip a leading byte-order mark (section 12). Without this, a root
+        // string that starts with U+FEFF loses its first character on a round
+        // trip. Reported upstream as toon-format/toon issue 339.
+        if unicodeScalars.first == "\u{FEFF}" {
             return false
         }
 
         return true
     }
 
+    /// Whether the key may appear without quotes.
+    ///
+    /// Specification 7.3 gives the pattern `^[A-Za-z_][A-Za-z0-9_.]*$`. The
+    /// `\w` class of NSRegularExpression covers every Unicode letter, so the
+    /// old pattern left a key such as `naive` with a diaeresis unquoted,
+    /// against section 16.
     var isValidUnquotedKey: Bool {
-        // Match pattern: starts with letter or underscore, followed by word characters or dots
-        return range(of: #"^[A-Z_][\w.]*$"#, options: [.regularExpression, .caseInsensitive])
-            != nil
+        var scalars = Array(unicodeScalars).makeIterator()
+        guard let first = scalars.next(), first.isASCIILetter || first == "_" else {
+            return false
+        }
+        while let scalar = scalars.next() {
+            guard scalar.isASCIILetter || scalar.isASCIIDigit || scalar == "_" || scalar == "."
+            else {
+                return false
+            }
+        }
+        return true
     }
 
+    /// A single segment of a folded key path: the pattern of specification
+    /// 7.3 without the dot.
     var isValidIdentifierSegment: Bool {
-        // Match pattern for a single identifier segment (no dots)
-        // Must start with letter or underscore, followed by word characters
-        return range(of: #"^[A-Z_]\w*$"#, options: [.regularExpression, .caseInsensitive])
-            != nil
+        !isEmpty && !contains(".") && isValidUnquotedKey
+    }
+}
+
+extension Unicode.Scalar {
+    /// `true` for an ASCII letter only.
+    fileprivate var isASCIILetter: Bool {
+        (self >= "A" && self <= "Z") || (self >= "a" && self <= "z")
     }
 }

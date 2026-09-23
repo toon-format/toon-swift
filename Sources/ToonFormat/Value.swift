@@ -11,7 +11,7 @@ enum Value: Equatable {
     case url(URL)
     case data(Data)
     case array([Value])
-    case object([String: Value], keyOrder: [String])
+    case object(ObjectStorage)
 
     // MARK: - Type Checks
 
@@ -68,8 +68,8 @@ enum Value: Equatable {
         return nil
     }
 
-    var objectValue: (values: [String: Value], keyOrder: [String])? {
-        if case let .object(values, keyOrder) = self { return (values, keyOrder) }
+    var objectValue: ObjectStorage? {
+        if case let .object(values) = self { return values }
         return nil
     }
 
@@ -122,3 +122,6 @@ struct IndexedCodingKey: CodingKey {
         self.intValue = intValue
     }
 }
+
+/// The values of an object, in the order in which they appear.
+typealias ObjectStorage = ScalarOrderedDictionary<Value>

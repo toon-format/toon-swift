@@ -1034,6 +1034,7 @@ struct DecoderTests {
         #expect(result.status == .active)
     }
 
+    @available(*, deprecated)
     @Test func intBackedEnum() async throws {
         enum Priority: Int, Codable {
             case low = 1
@@ -1053,6 +1054,7 @@ struct DecoderTests {
 
     // MARK: - Path Expansion
 
+    @available(*, deprecated)
     @Test func pathExpansionDisabled() async throws {
         struct DottedKeyObject: Codable, Equatable {
             let key: String
@@ -1071,6 +1073,7 @@ struct DecoderTests {
         #expect(result.key == "Ada")
     }
 
+    @available(*, deprecated)
     @Test func pathExpansionSafe() async throws {
         struct NestedObject: Codable, Equatable {
             struct User: Codable, Equatable {
@@ -1093,6 +1096,10 @@ struct DecoderTests {
         #expect(result.user.profile.name == "Ada")
     }
 
+    // Path expansion left the specification in 4.0, so the option is
+    // deprecated and its default is now .disabled. These tests set it
+    // explicitly, and go away with the option in 2.0.
+    @available(*, deprecated)
     @Test func pathExpansionAutomatic() async throws {
         struct NestedObject: Codable, Equatable {
             struct User: Codable, Equatable {
@@ -1107,8 +1114,10 @@ struct DecoderTests {
         }
 
         let decoder = TOONDecoder()
-        // .automatic is the default
-        #expect(decoder.expandPaths == .automatic)
+        // .disabled is the default since specification 4.0 removed the
+        // feature, so the test asks for the old behaviour explicitly.
+        #expect(decoder.expandPaths == .disabled)
+        decoder.expandPaths = .automatic
 
         let toon = "user.profile.name: Ada"
         let data = toon.data(using: .utf8)!
@@ -1116,6 +1125,7 @@ struct DecoderTests {
         #expect(result.user.profile.name == "Ada")
     }
 
+    @available(*, deprecated)
     @Test func pathExpansionAutomaticFallbackOnCollision() async throws {
         struct CollisionObject: Codable, Equatable {
             let user: String
@@ -1140,6 +1150,7 @@ struct DecoderTests {
         #expect(result.userName == "Lovelace")
     }
 
+    @available(*, deprecated)
     @Test func pathExpansionSafeCollisionError() async throws {
         struct CollisionObject: Codable {
             let user: String
@@ -1161,6 +1172,7 @@ struct DecoderTests {
         }
     }
 
+    @available(*, deprecated)
     @Test func multipleLevelPathExpansion() async throws {
         struct DeepNested: Codable, Equatable {
             struct Level1: Codable, Equatable {
@@ -1184,9 +1196,13 @@ struct DecoderTests {
         #expect(result.a.b.c.value == "deep")
     }
 
-    // MARK: - Auto-detected Indentation
+    // MARK: - Indent Size Option
 
-    @Test func autoDetectIndentation4Spaces() async throws {
+    // TOON specification 13.2 defines indentSize as a decoder option with a
+    // default of 2. Earlier releases guessed the size from the first indented
+    // line of the document, which is not a concept of the specification.
+
+    @Test func decodesFourSpaceIndentWithMatchingIndentSize() async throws {
         struct NestedObject: Codable, Equatable {
             struct Inner: Codable, Equatable {
                 let value: String
@@ -1199,12 +1215,13 @@ struct DecoderTests {
             outer:
                 value: test
             """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(NestedObject.self, from: data)
+        let decoder = TOONDecoder()
+        decoder.indentSize = 4
+        let result = try decoder.decode(NestedObject.self, from: Data(toon.utf8))
         #expect(result.outer.value == "test")
     }
 
-    @Test func autoDetectIndentation3Spaces() async throws {
+    @Test func decodesSingleSpaceIndentWithMatchingIndentSize() async throws {
         struct NestedObject: Codable, Equatable {
             struct Inner: Codable, Equatable {
                 let value: String
@@ -1213,34 +1230,393 @@ struct DecoderTests {
             let outer: Inner
         }
 
+        let decoder = TOONDecoder()
+        decoder.indentSize = 1
+        let result = try decoder.decode(NestedObject.self, from: Data("outer:\n value: test".utf8))
+        #expect(result.outer.value == "test")
+    }
+
+    @Test func floorsIndentationThatIsNotAMultipleOfIndentSize() async throws {
+        struct NestedObject: Codable, Equatable {
+            struct Inner: Codable, Equatable {
+                let value: String
+            }
+
+            let outer: Inner
+        }
+
+        // Specification 14.2 makes an indentation that is not a multiple of the
+        // indent size an error in strict mode. Section 12 allows a decoder to
+        // accept it otherwise. The depth is then the floor of the division, so
+        // three spaces at an indent size of two give depth one.
         let toon = """
             outer:
                value: test
             """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(NestedObject.self, from: data)
-        #expect(result.outer.value == "test")
-    }
-
-    @Test func singleSpaceIndentation() async throws {
-        struct NestedObject: Codable, Equatable {
-            struct Inner: Codable, Equatable {
-                let value: String
-            }
-            let outer: Inner
-        }
-
-        // Test 1-space indentation detection
-        let toon = "outer:\n value: test"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(NestedObject.self, from: data)
+        let decoder = TOONDecoder()
+        decoder.strict = false
+        let result = try decoder.decode(NestedObject.self, from: Data(toon.utf8))
         #expect(result.outer.value == "test")
     }
 
     // MARK: - Specification Compliance
 
     @Test func versionDeclaration() async throws {
-        #expect(toonSpecVersion == "3.0")
+        #expect(toonSpecVersion == "4.1")
+    }
+
+    @Test func repeatedKeyKeepsThePositionOfItsFirstAppearance() async throws {
+        // Specification 14.3: outside strict mode the last write wins, and the
+        // key keeps the position of its first appearance.
+        let decoder = TOONDecoder()
+        decoder.strict = false
+        let toon = """
+            a: 1
+            b: 2
+            a: 3
+            """
+
+        let value = try decoder.decode(TOONValue.self, from: Data(toon.utf8))
+
+        guard case let .object(object) = value else {
+            Issue.record("Expected an object, got \(value)")
+            return
+        }
+        #expect(object.keys == ["a", "b"])
+        #expect(object["a"] == .int(3))
+    }
+
+    @Test func keysThatDifferOnlyInNormalizationFormStayApart() async throws {
+        // Specification 2 and 16 make two keys the same key only when their
+        // Unicode scalar sequences are equal. The two keys below are
+        // canonically equivalent, so a Swift dictionary merges them, and
+        // strict mode would then report a duplicate key.
+        let composed = "\u{00E9}"
+        let decomposed = "e\u{0301}"
+        let toon = "\(composed): one\n\(decomposed): two"
+
+        let value = try decoder.decode(TOONValue.self, from: Data(toon.utf8))
+
+        guard case let .object(object) = value else {
+            Issue.record("Expected an object, got \(value)")
+            return
+        }
+        #expect(object.count == 2)
+        #expect(object[composed] == .string("one"))
+        #expect(object[decomposed] == .string("two"))
+    }
+
+    /// A decimal whose exponent overflows `Double` stays a string.
+    ///
+    /// `Double("1e999")` gives an infinity, not `nil`. An infinity has no place
+    /// in the data model of section 2. The encoder turns it into `null`, so the
+    /// value was lost on a round trip.
+    @Test func anExponentThatOverflowsDoubleStaysAString() async throws {
+        let value = try decoder.decode(TOONValue.self, from: Data("v: 1e999".utf8))
+
+        guard case let .object(object) = value else {
+            Issue.record("Expected an object, got \(value)")
+            return
+        }
+        #expect(object["v"] == .string("1e999"))
+
+        let negative = try decoder.decode(TOONValue.self, from: Data("v: -1e999".utf8))
+        if case let .object(object) = negative {
+            #expect(object["v"] == .string("-1e999"))
+        }
+
+        // A number that fits stays a number.
+        let large = try decoder.decode(TOONValue.self, from: Data("v: 1e308".utf8))
+        if case let .object(object) = large {
+            #expect(object["v"] == .double(1e308))
+        }
+    }
+
+    /// A defective array header inside a list item is an error in strict
+    /// mode, wherever the header sits.
+    ///
+    /// Three call sites used `try?`, so the error became `nil` and the line
+    /// then read as a key-value pair. The bracket segment went into the key.
+    /// The same defective header at the root was rejected, so the result
+    /// depended on the position in the document.
+    @Test func aDefectiveHeaderInAListItemIsAnErrorInStrictMode() async throws {
+        for source in ["a[1]:\n  - [2x]: p,q", "a[1]:\n  - nums[3x]: 1,2,3"] {
+            #expect(throws: TOONDecodingError.self) {
+                try self.decoder.decode(TOONValue.self, from: Data(source.utf8))
+            }
+        }
+    }
+
+    /// Outside strict mode the same header falls back to a key-value pair.
+    ///
+    /// Specification 6 allows that fallback, and the reference
+    /// implementation makes it.
+    @Test func aDefectiveHeaderInAListItemFallsBackOutsideStrictMode() async throws {
+        let lenient = TOONDecoder()
+        lenient.strict = false
+
+        let value = try lenient.decode(
+            TOONValue.self,
+            from: Data("a[1]:\n  - nums[3x]: 1,2,3".utf8)
+        )
+
+        let expected = TOONValue.object(
+            TOONObject([("a", .array([.object(TOONObject([("nums[3x]", .string("1,2,3"))]))]))])
+        )
+        #expect(value == expected)
+    }
+
+    /// A list-item line with a bracket but no colon stays a scalar.
+    ///
+    /// Section 5.2 needs a colon to end a header, so `- [1,2,3]` is the
+    /// string `[1,2,3]` and not a defective header.
+    @Test func aBracketLineWithNoColonStaysAScalar() async throws {
+        let value = try decoder.decode(TOONValue.self, from: Data("a[1]:\n  - [1,2,3]".utf8))
+
+        let expected = TOONValue.object(TOONObject([("a", .array([.string("[1,2,3]")]))]))
+        #expect(value == expected)
+    }
+
+    /// Outside strict mode a row of the wrong width is not an error.
+    ///
+    /// Section 14.1 makes a leaf with no cell absent from the object, and
+    /// lets a surplus cell contribute nothing. `materializeRow` already did
+    /// that, but both call sites threw before the field walk could run, so
+    /// the rule was unreachable.
+    @Test func aRowOfTheWrongWidthIsNotAnErrorOutsideStrictMode() async throws {
+        let lenient = TOONDecoder()
+        lenient.strict = false
+
+        let short = try lenient.decode(
+            TOONValue.self,
+            from: Data("items[1]{a,b,c}:\n  1,2".utf8)
+        )
+        let long = try lenient.decode(
+            TOONValue.self,
+            from: Data("items[1]{a,b}:\n  1,2,3".utf8)
+        )
+
+        let expected = TOONValue.object(
+            TOONObject([
+                ("items", .array([.object(TOONObject([("a", .int(1)), ("b", .int(2))]))]))
+            ])
+        )
+        #expect(short == expected)
+        #expect(long == expected)
+
+        // A keyed scope follows the same rule.
+        let keyed = try lenient.decode(
+            TOONValue.self,
+            from: Data("t[1:]{a,b}:\n  k: 1".utf8)
+        )
+        let expectedKeyed = TOONValue.object(
+            TOONObject([("t", .object(TOONObject([("k", .object(TOONObject([("a", .int(1))])))])))])
+        )
+        #expect(keyed == expectedKeyed)
+
+        // Strict mode still reports the mismatch.
+        #expect(throws: TOONDecodingError.self) {
+            try self.decoder.decode(TOONValue.self, from: Data("items[1]{a,b,c}:\n  1,2".utf8))
+        }
+    }
+
+    /// An indentation size below one is a mistake, not a silent flattening.
+    ///
+    /// The decoder divided by the size to get the depth of a line, and
+    /// treated a size of zero as depth zero for every line. The document
+    /// `a:` plus `  b: 1` then gave `{"a":{},"b":1}`, which loses the
+    /// structure and reports nothing.
+    @Test func anIndentSizeBelowOneIsAnError() async throws {
+        for size in [0, -1] {
+            let decoder = TOONDecoder()
+            decoder.indentSize = size
+            #expect(throws: TOONDecodingError.self) {
+                try decoder.decode(TOONValue.self, from: Data("a:\n  b: 1\n  c: 2".utf8))
+            }
+        }
+    }
+
+    /// Two field names that differ only in normalization form are two names.
+    ///
+    /// Section 16 gives a field name the same identity rule as a key. The
+    /// duplicate check used a `Set<String>`, and Swift compares a `String` by
+    /// canonical equivalence. A header that carries both forms was therefore
+    /// rejected as a duplicate.
+    @Test func fieldNamesThatDifferOnlyInNormalizationFormStayApart() async throws {
+        let composed = "\u{00E9}"
+        let decomposed = "e\u{0301}"
+        let toon = "rows[1]{\(composed),\(decomposed)}:\n  1,2"
+
+        let value = try decoder.decode(TOONValue.self, from: Data(toon.utf8))
+
+        let expected = TOONValue.object(
+            TOONObject([
+                (
+                    "rows",
+                    .array([
+                        .object(TOONObject([(composed, .int(1)), (decomposed, .int(2))]))
+                    ])
+                )
+            ])
+        )
+        #expect(value == expected)
+
+        // The same name twice is still a duplicate.
+        #expect(throws: TOONDecodingError.self) {
+            try self.decoder.decode(TOONValue.self, from: Data("rows[1]{a,a}:\n  1,2".utf8))
+        }
+    }
+
+    /// A token that section 4 makes a string never becomes a UInt64.
+    ///
+    /// A UInt64 above Int64.max stays a string in the model, and the Codable
+    /// bridge reads it back from there. `UInt64(_:)` accepts a leading plus,
+    /// which section 4 forbids, so `+5` decoded as the number 5.
+    @Test func aStringTokenDoesNotBecomeAUInt64() async throws {
+        struct Box: Codable { let n: UInt64 }
+
+        #expect(throws: TOONDecodingError.self) {
+            try self.decoder.decode(Box.self, from: Data("n: +5".utf8))
+        }
+
+        // A value above Int64.max still survives the round trip.
+        let big = try decoder.decode(Box.self, from: Data("n: \"18446744073709551615\"".utf8))
+        #expect(big.n == UInt64.max)
+    }
+
+    /// A Double that a Float cannot hold is an error, not an infinity.
+    ///
+    /// Every integer helper uses `exactly:` and reports a value that does not
+    /// fit. The Float path returned `Float(doubleValue)`, which gives an
+    /// infinity for a finite Double that is too large.
+    @Test func aDoubleThatDoesNotFitAFloatIsAnError() async throws {
+        struct Box: Codable { let f: Float }
+
+        #expect(throws: TOONDecodingError.self) {
+            try self.decoder.decode(Box.self, from: Data("f: 1e300".utf8))
+        }
+
+        // A value that fits still decodes, and an inexact one is not rejected.
+        let fits = try decoder.decode(Box.self, from: Data("f: 0.1".utf8))
+        #expect(fits.f == Float(0.1))
+    }
+
+    /// Outside strict mode a line after the root value is ignored.
+    ///
+    /// Section 14.2 makes trailing content an error in strict mode only. The
+    /// check ran in both modes, so a document that the reference
+    /// implementation reads was rejected.
+    @Test func trailingContentIsIgnoredOutsideStrictMode() async throws {
+        let lenient = TOONDecoder()
+        lenient.strict = false
+
+        let value = try lenient.decode(
+            TOONValue.self,
+            from: Data("[2]: 1,2\nleftover: 1".utf8)
+        )
+        #expect(value == .array([.int(1), .int(2)]))
+
+        #expect(throws: TOONDecodingError.self) {
+            try self.decoder.decode(TOONValue.self, from: Data("[2]: 1,2\nleftover: 1".utf8))
+        }
+    }
+
+    // MARK: - Error Line Numbers
+
+    /// One error, and the line of the document that carries the defect.
+    struct ErrorLineCase: Sendable, CustomTestStringConvertible {
+        let label: String
+        let source: String
+        let line: Int
+
+        var testDescription: String { label }
+    }
+
+    /// Every error that names a line, with the line that carries the defect.
+    ///
+    /// The count of a scope, the width of a row and a duplicate key are all
+    /// found after the read of the line. The decoder used to report the line
+    /// that follows, because ``currentLine`` already points past the line at
+    /// that moment. Three other messages used the index into the filtered
+    /// lines, so a comment line above the defect shifted the number.
+    ///
+    /// Only a test of the number catches either defect. A test that asks for
+    /// an error alone passes with any number.
+    static let errorLines: [ErrorLineCase] = [
+        .init(label: "a duplicate key", source: "a: 1\na: 2", line: 2),
+        .init(label: "a duplicate key below a comment", source: "# note\na: 1\na: 2", line: 3),
+        .init(label: "an unterminated quoted value", source: "a: 1\nb: \"x", line: 2),
+        .init(label: "content after a closing quote", source: "a: 1\nk: \"abc\" def", line: 2),
+        .init(label: "too few list items", source: "x: 0\nitems[2]:\n  - 1", line: 3),
+        .init(label: "too many inline values", source: "tags[2]: a,b,c", line: 1),
+        .init(label: "too few inline values", source: "x: 0\ntags[3]: a,b", line: 2),
+        .init(label: "too few tabular rows", source: "x: 0\nitems[2]{a}:\n  1", line: 3),
+        .init(label: "a tabular row of the wrong width", source: "items[1]{a,b,c}:\n  1,2", line: 2),
+        .init(label: "too few keyed rows", source: "x: 0\nm[2:]{v}:\n  k: 1", line: 3),
+        .init(label: "a keyed row with no colon", source: "x: 0\nm[1:]{v}:\n  bare", line: 3),
+        .init(label: "a keyed row of the wrong width", source: "x: 0\nm[1:]{a,b}:\n  k: 1", line: 3),
+        .init(label: "a blank line inside a scope", source: "items[2]:\n  - 1\n\n  - 2", line: 3),
+        .init(
+            label: "a blank line inside a list item",
+            source: "x: 0\nitems[2]:\n  - a: 1\n\n    b: 2\n  - c: 3",
+            line: 4
+        ),
+        .init(label: "content after the root value", source: "[2]: 1,2\nleftover: 1", line: 2),
+        .init(label: "a line that is not a pair", source: "a: 1\nb", line: 2),
+        .init(
+            label: "a line that is not a pair, below comments",
+            source: "# one\n# two\n# three\na: 1\nb",
+            line: 5
+        ),
+        .init(label: "a list item outside an array", source: "a: 1\n- 2", line: 2),
+        .init(
+            label: "a list item outside an array, below comments",
+            source: "# one\n# two\na: 1\n- 2",
+            line: 4
+        ),
+        .init(
+            label: "a list item among the fields of an object",
+            source: "# one\n# two\na:\n  b: 1\n  - x",
+            line: 5
+        ),
+        .init(label: "indentation that is not a multiple", source: "a:\n   b: 1", line: 2),
+        .init(label: "indentation that is too deep", source: "a:\n  b: 1\n     c: 2", line: 3),
+    ]
+
+    @Test("an error names the line that carries the defect", arguments: errorLines)
+    func errorNamesTheLineOfTheDefect(_ testCase: ErrorLineCase) throws {
+        let decoder = TOONDecoder()
+        var reported: Int?
+
+        do {
+            _ = try decoder.decode(TOONValue.self, from: Data(testCase.source.utf8))
+            Issue.record("Expected an error for \(testCase.label).")
+            return
+        } catch let error as TOONDecodingError {
+            reported = Self.lineNumber(of: error)
+        }
+
+        #expect(reported == testCase.line, "the error was \(testCase.label)")
+    }
+
+    /// Reads the line number out of an error.
+    ///
+    /// Some cases carry the number in a field, and some put it in the message,
+    /// so this helper reads both.
+    private static func lineNumber(of error: TOONDecodingError) -> Int? {
+        switch error {
+        case let .countMismatch(_, _, line): return line
+        case let .fieldCountMismatch(_, _, line): return line
+        case let .unexpectedBlankLine(line): return line
+        case let .invalidIndentation(line, _): return line
+        case let .pathCollision(_, line): return line
+        default: break
+        }
+
+        let text = "\(error)"
+        guard let range = text.range(of: "line ") else { return nil }
+        let digits = text[range.upperBound...].prefix { $0.isASCII && $0.isNumber }
+        return Int(digits)
     }
 
     // MARK: - Error Cases
@@ -1573,6 +1949,23 @@ struct DecoderTests {
 
         #expect(throws: TOONDecodingError.self) {
             try decoder.decode(Level1.self, from: data)
+        }
+    }
+
+    @Test func depthLimitExceededByNestedFieldGroups() async throws {
+        let decoder = TOONDecoder()
+        let depth = decoder.limits.maxDepth + 1
+        let groups = String(repeating: "x{", count: depth)
+        let braces = String(repeating: "}", count: depth)
+        let data = Data("a[1]{\(groups)y\(braces)}:\n  1".utf8)
+
+        #expect(throws: TOONDecodingError.self) {
+            try decoder.decode(TOONValue.self, from: data)
+        }
+
+        decoder.limits = .unlimited
+        #expect(throws: Never.self) {
+            try decoder.decode(TOONValue.self, from: Data("a[1]{x{y}}:\n  1".utf8))
         }
     }
 
