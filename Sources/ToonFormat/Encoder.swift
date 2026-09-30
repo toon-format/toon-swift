@@ -1202,7 +1202,7 @@ extension TOONEncoder {
         }
 
         func encode(_ value: UInt, forKey key: Key) throws {
-            container[key.stringValue] = .int(Int64(value))
+            try encode(UInt64(value), forKey: key)
         }
 
         func encode(_ value: UInt8, forKey key: Key) throws {
@@ -1489,7 +1489,7 @@ extension TOONEncoder {
         }
 
         func encode(_ value: UInt) throws {
-            container.append(.int(Int64(value)))
+            try encode(UInt64(value))
         }
 
         func encode(_ value: UInt8) throws {
@@ -1640,7 +1640,7 @@ extension TOONEncoder {
         }
 
         func encode(_ value: UInt) throws {
-            encoder.storage.append(.int(Int64(value)))
+            try encode(UInt64(value))
         }
 
         func encode(_ value: UInt8) throws {

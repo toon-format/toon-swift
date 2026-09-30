@@ -1514,6 +1514,23 @@ struct EncoderTests {
         #expect(maxResult == "value: \"18446744073709551615\"")
     }
 
+    @Test func uintEncodingAboveInt64Max() async throws {
+        struct UIntObject: Codable, Equatable {
+            let value: UInt
+            let list: [UInt]
+        }
+
+        let object = UIntObject(value: UInt.max, list: [1, UInt(Int64.max) + 1])
+        let result = String(data: try encoder.encode(object), encoding: .utf8)!
+        #expect(result == "value: \"18446744073709551615\"\nlist[2]: 1,\"9223372036854775808\"")
+
+        let decoded = try TOONDecoder().decode(UIntObject.self, from: Data(result.utf8))
+        #expect(decoded == object)
+
+        let root = String(data: try encoder.encode(UInt.max), encoding: .utf8)!
+        #expect(root == "\"18446744073709551615\"")
+    }
+
     @Test func optionalToNull() async throws {
         // Swift optionals convert to null when nil, similar to JavaScript's undefined → null
         struct OptionalValueObject: Codable {
