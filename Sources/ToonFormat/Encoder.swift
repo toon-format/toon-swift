@@ -1156,6 +1156,11 @@ extension TOONEncoder {
         }()
         private var didFinishEncoding = false
 
+        /// Set on a nested container, whose own encoder storage no one reads.
+        /// The closure retains the parent, so the parent finishes only after
+        /// this container has filled its slot.
+        fileprivate var writeBack: ((Value) -> Void)?
+
         init(encoder: Encoder, codingPath: [CodingKey]) {
             self.encoder = encoder
             self.codingPath = codingPath
@@ -1391,11 +1396,14 @@ extension TOONEncoder {
                 codingPath: codingPath + [key],
                 userInfo: encoder.userInfo
             )
-            let container = KeyedContainer<NestedKey>(
+            let nested = KeyedContainer<NestedKey>(
                 encoder: nestedEncoder,
                 codingPath: nestedEncoder.codingPath
             )
-            return KeyedEncodingContainer(container)
+            let slot = key.stringValue
+            container[slot] = .object([:])
+            nested.writeBack = { value in self.container[slot] = value }
+            return KeyedEncodingContainer(nested)
         }
 
         func nestedUnkeyedContainer(forKey key: Key) -> UnkeyedEncodingContainer {
@@ -1403,10 +1411,14 @@ extension TOONEncoder {
                 codingPath: codingPath + [key],
                 userInfo: encoder.userInfo
             )
-            return UnkeyedContainer(
+            let nested = UnkeyedContainer(
                 encoder: nestedEncoder,
                 codingPath: nestedEncoder.codingPath
             )
+            let slot = key.stringValue
+            container[slot] = .array([])
+            nested.writeBack = { value in self.container[slot] = value }
+            return nested
         }
 
         func superEncoder() -> Swift.Encoder {
@@ -1420,7 +1432,12 @@ extension TOONEncoder {
         func finishEncoding() {
             guard !didFinishEncoding else { return }
             didFinishEncoding = true
-            encoder.storage.append(.object(isDictionaryCodingKey ? container.sortedByKey() : container))
+            let value = Value.object(isDictionaryCodingKey ? container.sortedByKey() : container)
+            if let writeBack {
+                writeBack(value)
+            } else {
+                encoder.storage.append(value)
+            }
         }
 
         deinit {
@@ -1438,6 +1455,10 @@ extension TOONEncoder {
         let codingPath: [any Swift.CodingKey]
 
         private var container: [Value] = []
+        private var didFinishEncoding = false
+
+        /// See ``KeyedContainer/writeBack``.
+        fileprivate var writeBack: ((Value) -> Void)?
 
         init(encoder: Encoder, codingPath: [any Swift.CodingKey]) {
             self.encoder = encoder
@@ -1554,11 +1575,14 @@ extension TOONEncoder {
                 codingPath: codingPath + [IndexedCodingKey(intValue: count)],
                 userInfo: encoder.userInfo
             )
-            let container = KeyedContainer<NestedKey>(
+            let nested = KeyedContainer<NestedKey>(
                 encoder: nestedEncoder,
                 codingPath: nestedEncoder.codingPath
             )
-            return KeyedEncodingContainer(container)
+            let slot = container.count
+            container.append(.object([:]))
+            nested.writeBack = { value in self.container[slot] = value }
+            return KeyedEncodingContainer(nested)
         }
 
         func nestedUnkeyedContainer() -> UnkeyedEncodingContainer {
@@ -1566,10 +1590,14 @@ extension TOONEncoder {
                 codingPath: codingPath + [IndexedCodingKey(intValue: count)],
                 userInfo: encoder.userInfo
             )
-            return UnkeyedContainer(
+            let nested = UnkeyedContainer(
                 encoder: nestedEncoder,
                 codingPath: nestedEncoder.codingPath
             )
+            let slot = container.count
+            container.append(.array([]))
+            nested.writeBack = { value in self.container[slot] = value }
+            return nested
         }
 
         func superEncoder() -> Swift.Encoder {
@@ -1577,12 +1605,18 @@ extension TOONEncoder {
         }
 
         func finishEncoding() {
-            encoder.storage.append(.array(container))
+            guard !didFinishEncoding else { return }
+            didFinishEncoding = true
+            if let writeBack {
+                writeBack(.array(container))
+            } else {
+                encoder.storage.append(.array(container))
+            }
         }
 
         deinit {
             // Ensure the container is finished when it goes out of scope
-            encoder.storage.append(.array(container))
+            finishEncoding()
         }
     }
 }
