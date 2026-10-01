@@ -7,6 +7,18 @@ on:
     branches: ["main"]
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: macos-26
+    env:
+      DEVELOPER_DIR: "/Applications/Xcode_26.6.app/Contents/Developer"
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint
+        run: swift format lint --strict --recursive .
+
   test-macos:
     name: Swift ${{ matrix.swift }} on Xcode ${{ matrix.xcode }}
     runs-on: ${{ matrix.runs-on }}
@@ -31,9 +43,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
-      - name: Lint
-        run: swift format lint --strict --recursive .
 
       - name: Build
         run: swift build -v
