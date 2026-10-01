@@ -17,8 +17,8 @@ swift build
 # Run tests
 swift test
 
-# Generate Xcode project (optional)
-swift package generate-xcodeproj
+# Open in Xcode (optional)
+xed .
 ```
 
 ## Development Workflow
@@ -87,9 +87,6 @@ swift test -v
 
 # Clean build artifacts
 swift package clean
-
-# Generate Xcode project
-swift package generate-xcodeproj
 ```
 
 ## SPEC Compliance
