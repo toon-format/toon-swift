@@ -458,12 +458,12 @@ and the process for submitting pull requests.
 
 Before contributing, please review:
 
-- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Code of Conduct](https://github.com/toon-format/.github/blob/main/.github/CODE_OF_CONDUCT.md)
 - [TOON Specification](https://github.com/toon-format/spec/blob/main/SPEC.md)
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+This project follows the [Contributor Covenant Code of Conduct](https://github.com/toon-format/.github/blob/main/.github/CODE_OF_CONDUCT.md).
 By participating, you are expected to uphold this code.
 Please report unacceptable behavior to hello@johannschopplich.com.
 
