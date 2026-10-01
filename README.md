@@ -250,6 +250,12 @@ encoder.nonConformingFloatEncodingStrategy = .convertToString(
 )
 ```
 
+#### Numeric Domain
+
+An integer that does not fit `Int64` and a decimal that overflows `Double`,
+such as `1e400`, decode as strings, so no digit is lost.
+A `UInt64` above `Int64.max` encodes as a quoted decimal string and decodes back from it.
+
 #### Tabular Arrays
 
 Arrays of objects with identical primitive fields use an efficient tabular format:
