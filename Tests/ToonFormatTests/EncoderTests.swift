@@ -557,6 +557,46 @@ struct EncoderTests {
         #expect(emptyNestedResult.contains("user:"))
     }
 
+    @Test func nestedContainersFromKeyedContainer() async throws {
+        struct Record: Encodable {
+            enum Keys: String, CodingKey { case id, meta, tags, empty }
+            enum MetaKeys: String, CodingKey { case owner }
+
+            func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: Keys.self)
+                try container.encode(1, forKey: .id)
+                var meta = container.nestedContainer(keyedBy: MetaKeys.self, forKey: .meta)
+                try meta.encode("ada", forKey: .owner)
+                var tags = container.nestedUnkeyedContainer(forKey: .tags)
+                try tags.encode("a")
+                try tags.encode("b")
+                _ = container.nestedUnkeyedContainer(forKey: .empty)
+            }
+        }
+
+        let result = String(data: try encoder.encode(Record()), encoding: .utf8)!
+        #expect(result == "id: 1\nmeta:\n  owner: ada\ntags[2]: a,b\nempty: []")
+    }
+
+    @Test func nestedContainersFromUnkeyedContainer() async throws {
+        struct Pairs: Encodable {
+            enum Keys: String, CodingKey { case x }
+
+            func encode(to encoder: any Encoder) throws {
+                var container = encoder.unkeyedContainer()
+                var first = container.nestedContainer(keyedBy: Keys.self)
+                try first.encode(1, forKey: .x)
+                var second = container.nestedUnkeyedContainer()
+                try second.encode(2)
+                try second.encode(3)
+                try container.encode(4)
+            }
+        }
+
+        let result = String(data: try encoder.encode(Pairs()), encoding: .utf8)!
+        #expect(result == "[3]:\n  - x: 1\n  - [2]: 2,3\n  - 4")
+    }
+
     // MARK: - Primitive Arrays
 
     @Test func primitiveArrays() async throws {
