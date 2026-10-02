@@ -14,7 +14,7 @@ jobs:
       DEVELOPER_DIR: "/Applications/Xcode_26.6.app/Contents/Developer"
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Lint
         run: swift format lint --strict --recursive .
@@ -42,7 +42,7 @@ jobs:
             runs-on: macos-26
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build
         run: swift build -v
@@ -65,7 +65,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Swift
         uses: vapor/swiftly-action@v0.2
