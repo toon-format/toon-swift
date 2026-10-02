@@ -250,6 +250,23 @@ encoder.nonConformingFloatEncodingStrategy = .convertToString(
 )
 ```
 
+#### Numeric Domain
+
+An integer that does not fit `Int64` and a decimal that overflows `Double`,
+such as `1e400`, decode as strings, so no digit is lost.
+A `UInt64` above `Int64.max` encodes as a quoted decimal string and decodes back from it.
+
+#### Host Types
+
+The encoder writes these Swift types as follows, and the decoder reads them back:
+
+| Swift type | TOON value |
+|------------|------------|
+| `Date` | ISO 8601 string with fractional seconds |
+| `URL` | `absoluteString` |
+| `Data` | Base64 string |
+| `nil` | `null` |
+
 #### Tabular Arrays
 
 Arrays of objects with identical primitive fields use an efficient tabular format:
@@ -441,12 +458,12 @@ and the process for submitting pull requests.
 
 Before contributing, please review:
 
-- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Code of Conduct](https://github.com/toon-format/.github/blob/main/.github/CODE_OF_CONDUCT.md)
 - [TOON Specification](https://github.com/toon-format/spec/blob/main/SPEC.md)
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+This project follows the [Contributor Covenant Code of Conduct](https://github.com/toon-format/.github/blob/main/.github/CODE_OF_CONDUCT.md).
 By participating, you are expected to uphold this code.
 Please report unacceptable behavior to hello@johannschopplich.com.
 
