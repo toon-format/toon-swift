@@ -2442,11 +2442,11 @@ private func decodeInt(from value: Value) throws -> Int {
 }
 
 private func decodeUInt(from value: Value) throws -> UInt {
-    guard let intValue = value.intValue else {
-        throw TOONDecodingError.typeMismatch(expected: "uint", actual: value.typeName)
-    }
-    guard let result = UInt(exactly: intValue) else {
-        throw TOONDecodingError.dataCorrupted("Value \(intValue) does not fit in UInt")
+    // A UInt above Int64.max is written as a quoted string, the same as a
+    // UInt64, so read it back through the UInt64 path.
+    let wide = try decodeUInt64(from: value)
+    guard let result = UInt(exactly: wide) else {
+        throw TOONDecodingError.dataCorrupted("Value \(wide) does not fit in UInt")
     }
     return result
 }
