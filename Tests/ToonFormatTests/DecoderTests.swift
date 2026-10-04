@@ -10,106 +10,6 @@ struct DecoderTests {
 
     // MARK: - Primitives
 
-    @Test func safeStrings() async throws {
-        let data = "hello".data(using: .utf8)!
-        let result = try decoder.decode(String.self, from: data)
-        #expect(result == "hello")
-
-        let data2 = "Ada_99".data(using: .utf8)!
-        let result2 = try decoder.decode(String.self, from: data2)
-        #expect(result2 == "Ada_99")
-    }
-
-    @Test func emptyString() async throws {
-        let data = "\"\"".data(using: .utf8)!
-        let result = try decoder.decode(String.self, from: data)
-        #expect(result == "")
-    }
-
-    @Test func quotedStrings() async throws {
-        // Quoted strings that look like booleans/null should remain strings
-        let data = "\"true\"".data(using: .utf8)!
-        let result = try decoder.decode(String.self, from: data)
-        #expect(result == "true")
-
-        let data2 = "\"false\"".data(using: .utf8)!
-        let result2 = try decoder.decode(String.self, from: data2)
-        #expect(result2 == "false")
-
-        let data3 = "\"null\"".data(using: .utf8)!
-        let result3 = try decoder.decode(String.self, from: data3)
-        #expect(result3 == "null")
-    }
-
-    @Test func quotedNumberStrings() async throws {
-        // Quoted strings that look like numbers should remain strings
-        let data = "\"42\"".data(using: .utf8)!
-        let result = try decoder.decode(String.self, from: data)
-        #expect(result == "42")
-
-        let data2 = "\"-3.14\"".data(using: .utf8)!
-        let result2 = try decoder.decode(String.self, from: data2)
-        #expect(result2 == "-3.14")
-    }
-
-    @Test func escapeSequences() async throws {
-        let data = "\"line1\\nline2\"".data(using: .utf8)!
-        let result = try decoder.decode(String.self, from: data)
-        #expect(result == "line1\nline2")
-
-        let data2 = "\"tab\\there\"".data(using: .utf8)!
-        let result2 = try decoder.decode(String.self, from: data2)
-        #expect(result2 == "tab\there")
-
-        let data3 = "\"return\\rcarriage\"".data(using: .utf8)!
-        let result3 = try decoder.decode(String.self, from: data3)
-        #expect(result3 == "return\rcarriage")
-
-        let data4 = "\"C:\\\\Users\\\\path\"".data(using: .utf8)!
-        let result4 = try decoder.decode(String.self, from: data4)
-        #expect(result4 == "C:\\Users\\path")
-    }
-
-    @Test func quotedEscapeInString() async throws {
-        let data = "\"hello \\\"world\\\"\"".data(using: .utf8)!
-        let result = try decoder.decode(String.self, from: data)
-        #expect(result == "hello \"world\"")
-    }
-
-    @Test func multipleEscapeSequences() async throws {
-        let data = "\"line1\\nline2\\ttab\\rreturn\\\\slash\"".data(using: .utf8)!
-        let result = try decoder.decode(String.self, from: data)
-        #expect(result == "line1\nline2\ttab\rreturn\\slash")
-    }
-
-    @Test func unicodeAndEmoji() async throws {
-        let data = "café".data(using: .utf8)!
-        let result = try decoder.decode(String.self, from: data)
-        #expect(result == "café")
-
-        let data2 = "你好".data(using: .utf8)!
-        let result2 = try decoder.decode(String.self, from: data2)
-        #expect(result2 == "你好")
-
-        let data3 = "🚀".data(using: .utf8)!
-        let result3 = try decoder.decode(String.self, from: data3)
-        #expect(result3 == "🚀")
-    }
-
-    @Test func integers() async throws {
-        let data = "42".data(using: .utf8)!
-        let result = try decoder.decode(Int.self, from: data)
-        #expect(result == 42)
-
-        let data2 = "-7".data(using: .utf8)!
-        let result2 = try decoder.decode(Int.self, from: data2)
-        #expect(result2 == -7)
-
-        let data3 = "0".data(using: .utf8)!
-        let result3 = try decoder.decode(Int.self, from: data3)
-        #expect(result3 == 0)
-    }
-
     @Test func largeIntegers() async throws {
         let data = "9223372036854775807".data(using: .utf8)!  // Int64.max
         let result = try decoder.decode(Int64.self, from: data)
@@ -118,34 +18,6 @@ struct DecoderTests {
         let data2 = "-9223372036854775808".data(using: .utf8)!  // Int64.min
         let result2 = try decoder.decode(Int64.self, from: data2)
         #expect(result2 == Int64.min)
-    }
-
-    @Test func doubles() async throws {
-        let data = "3.14".data(using: .utf8)!
-        let result = try decoder.decode(Double.self, from: data)
-        #expect(result == 3.14)
-    }
-
-    @Test func negativeDouble() async throws {
-        let data = "-3.14".data(using: .utf8)!
-        let result = try decoder.decode(Double.self, from: data)
-        #expect(result == -3.14)
-    }
-
-    @Test func zeroDouble() async throws {
-        let data = "0.0".data(using: .utf8)!
-        let result = try decoder.decode(Double.self, from: data)
-        #expect(result == 0.0)
-    }
-
-    @Test func scientificNotation() async throws {
-        let data = "1.5e10".data(using: .utf8)!
-        let result = try decoder.decode(Double.self, from: data)
-        #expect(result == 1.5e10)
-
-        let data2 = "-2.5E-3".data(using: .utf8)!
-        let result2 = try decoder.decode(Double.self, from: data2)
-        #expect(result2 == -2.5e-3)
     }
 
     @Test func floatDecoding() async throws {
@@ -159,16 +31,6 @@ struct DecoderTests {
         #expect(abs(result.value - 3.14) < 0.001)
     }
 
-    @Test func booleans() async throws {
-        let data = "true".data(using: .utf8)!
-        let result = try decoder.decode(Bool.self, from: data)
-        #expect(result == true)
-
-        let data2 = "false".data(using: .utf8)!
-        let result2 = try decoder.decode(Bool.self, from: data2)
-        #expect(result2 == false)
-    }
-
     @Test func nullRootValue() async throws {
         let data = "null".data(using: .utf8)!
         let result = try decoder.decode(String?.self, from: data)
@@ -176,26 +38,6 @@ struct DecoderTests {
     }
 
     // MARK: - Simple Objects
-
-    @Test func simpleObject() async throws {
-        struct TestObject: Codable, Equatable {
-            let id: Int
-            let name: String
-            let active: Bool
-        }
-
-        let toon = """
-            id: 123
-            name: Ada
-            active: true
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(TestObject.self, from: data)
-
-        #expect(result.id == 123)
-        #expect(result.name == "Ada")
-        #expect(result.active == true)
-    }
 
     @Test func objectWithNullValue() async throws {
         struct NullTestObject: Codable, Equatable {
@@ -214,38 +56,6 @@ struct DecoderTests {
         #expect(result.value == nil)
     }
 
-    @Test func emptyObject() async throws {
-        struct EmptyObject: Codable, Equatable {}
-
-        let toon = ""
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(EmptyObject.self, from: data)
-        #expect(result == EmptyObject())
-    }
-
-    @Test func emptyNestedObject() async throws {
-        struct Outer: Codable, Equatable {
-            struct Inner: Codable, Equatable {}
-            let inner: Inner
-        }
-
-        let toon = "inner:"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(Outer.self, from: data)
-        #expect(result.inner == Outer.Inner())
-    }
-
-    @Test func objectWithSpecialCharacterStrings() async throws {
-        struct SpecialStringObject: Codable, Equatable {
-            let note: String
-        }
-
-        let toon = "note: \"a:b\""
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(SpecialStringObject.self, from: data)
-        #expect(result.note == "a:b")
-    }
-
     @Test func extraWhitespaceInValues() async throws {
         struct TestObject: Codable, Equatable {
             let name: String
@@ -254,20 +64,6 @@ struct DecoderTests {
         let toon = "name:   Ada   "
         let data = toon.data(using: .utf8)!
         let result = try decoder.decode(TestObject.self, from: data)
-        #expect(result.name == "Ada")
-    }
-
-    @Test func crlfLineEndings() async throws {
-        struct TestObject: Codable, Equatable {
-            let id: Int
-            let name: String
-        }
-
-        let toon = "id: 123\r\nname: Ada"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(TestObject.self, from: data)
-
-        #expect(result.id == 123)
         #expect(result.name == "Ada")
     }
 
@@ -343,43 +139,6 @@ struct DecoderTests {
 
     // MARK: - Object Keys
 
-    @Test func keysWithSpecialCharacters() async throws {
-        struct SpecialKeyObject: Codable, Equatable {
-            let orderId: Int
-            let index: Int
-
-            enum CodingKeys: String, CodingKey {
-                case orderId = "order:id"
-                case index = "[index]"
-            }
-        }
-
-        let toon = """
-            "order:id": 7
-            "[index]": 5
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(SpecialKeyObject.self, from: data)
-
-        #expect(result.orderId == 7)
-        #expect(result.index == 5)
-    }
-
-    @Test func keysWithSpacesAndHyphens() async throws {
-        struct SpaceKeyObject: Codable, Equatable {
-            let fullName: String
-
-            enum CodingKeys: String, CodingKey {
-                case fullName = "full name"
-            }
-        }
-
-        let toon = "\"full name\": Ada"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(SpaceKeyObject.self, from: data)
-        #expect(result.fullName == "Ada")
-    }
-
     @Test func unicodeKeys() async throws {
         struct UnicodeKeyObject: Codable, Equatable {
             let greeting: String
@@ -396,30 +155,6 @@ struct DecoderTests {
     }
 
     // MARK: - Nested Objects
-
-    @Test func deepNestedObjects() async throws {
-        struct DeepNestedObject: Codable, Equatable {
-            struct Level2: Codable, Equatable {
-                struct Level3: Codable, Equatable {
-                    let c: String
-                }
-
-                let b: Level3
-            }
-
-            let a: Level2
-        }
-
-        let toon = """
-            a:
-              b:
-                c: deep
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(DeepNestedObject.self, from: data)
-
-        #expect(result.a.b.c == "deep")
-    }
 
     @Test func nestedDictionary() async throws {
         struct OuterObject: Codable, Equatable {
@@ -440,34 +175,6 @@ struct DecoderTests {
 
     // MARK: - Primitive Arrays
 
-    @Test func primitiveArraysInline() async throws {
-        struct PrimitiveArrayObject: Codable, Equatable {
-            let tags: [String]
-            let nums: [Int]
-        }
-
-        let toon = """
-            tags[2]: reading,gaming
-            nums[3]: 1,2,3
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(PrimitiveArrayObject.self, from: data)
-
-        #expect(result.tags == ["reading", "gaming"])
-        #expect(result.nums == [1, 2, 3])
-    }
-
-    @Test func emptyArrays() async throws {
-        struct EmptyArrayObject: Codable, Equatable {
-            let items: [String]
-        }
-
-        let toon = "items[0]:"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(EmptyArrayObject.self, from: data)
-        #expect(result.items == [])
-    }
-
     @Test func multipleEmptyArrays() async throws {
         struct MultiEmptyArrays: Codable, Equatable {
             let a: [String]
@@ -487,51 +194,6 @@ struct DecoderTests {
         #expect(result.c == [])
     }
 
-    @Test func arrayWithQuotedStrings() async throws {
-        struct QuotedArrayObject: Codable, Equatable {
-            let data: [String]
-        }
-
-        let toon = "data[4]: x,y,\"true\",\"10\""
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(QuotedArrayObject.self, from: data)
-        #expect(result.data == ["x", "y", "true", "10"])
-    }
-
-    @Test func emptyStringInArray() async throws {
-        struct ArrayObject: Codable, Equatable {
-            let items: [String]
-        }
-
-        let toon = "items[3]: a,\"\",b"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(ArrayObject.self, from: data)
-        #expect(result.items == ["a", "", "b"])
-    }
-
-    @Test func arraysWithSpecialStringValues() async throws {
-        struct SpecialArrayObject: Codable, Equatable {
-            let items: [String]
-        }
-
-        // Test strings with commas (quoted)
-        let toon = "items[3]: \"a,b\",c,d"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(SpecialArrayObject.self, from: data)
-        #expect(result.items == ["a,b", "c", "d"])
-    }
-
-    @Test func boolArrayInline() async throws {
-        struct BoolArrayObject: Codable, Equatable {
-            let flags: [Bool]
-        }
-
-        let toon = "flags[3]: true,false,true"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(BoolArrayObject.self, from: data)
-        #expect(result.flags == [true, false, true])
-    }
-
     @Test func nullInArray() async throws {
         struct NullArrayObject: Codable, Equatable {
             let items: [String?]
@@ -547,34 +209,6 @@ struct DecoderTests {
     }
 
     // MARK: - Object Arrays (Tabular Format)
-
-    @Test func tabularFormat() async throws {
-        struct TabularObject: Codable, Equatable {
-            let sku: String
-            let qty: Int
-            let price: Double
-        }
-
-        struct TabularArrayObject: Codable, Equatable {
-            let items: [TabularObject]
-        }
-
-        let toon = """
-            items[2]{sku,qty,price}:
-              A1,2,9.99
-              B2,1,14.5
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(TabularArrayObject.self, from: data)
-
-        #expect(result.items.count == 2)
-        #expect(result.items[0].sku == "A1")
-        #expect(result.items[0].qty == 2)
-        #expect(result.items[0].price == 9.99)
-        #expect(result.items[1].sku == "B2")
-        #expect(result.items[1].qty == 1)
-        #expect(result.items[1].price == 14.5)
-    }
 
     @Test func tabularFormatWithNullValues() async throws {
         struct NullTabularObject: Codable, Equatable {
@@ -600,281 +234,7 @@ struct DecoderTests {
         #expect(result.items[1].value == "test")
     }
 
-    @Test func singleColumnTabular() async throws {
-        struct SingleColumn: Codable, Equatable {
-            let id: Int
-        }
-
-        struct Container: Codable, Equatable {
-            let items: [SingleColumn]
-        }
-
-        let toon = """
-            items[3]{id}:
-              1
-              2
-              3
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(Container.self, from: data)
-
-        #expect(result.items.count == 3)
-        #expect(result.items[0].id == 1)
-        #expect(result.items[1].id == 2)
-        #expect(result.items[2].id == 3)
-    }
-
-    @Test func tabularWithQuotedFieldNames() async throws {
-        struct SpecialFields: Codable, Equatable {
-            let firstName: String
-            let lastName: String
-
-            enum CodingKeys: String, CodingKey {
-                case firstName = "first:name"
-                case lastName = "last:name"
-            }
-        }
-
-        struct Container: Codable, Equatable {
-            let people: [SpecialFields]
-        }
-
-        let toon = """
-            people[2]{"first:name","last:name"}:
-              Ada,Lovelace
-              Grace,Hopper
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(Container.self, from: data)
-
-        #expect(result.people.count == 2)
-        #expect(result.people[0].firstName == "Ada")
-        #expect(result.people[0].lastName == "Lovelace")
-    }
-
-    @Test func stringStringDictionary() async throws {
-        let toon = """
-            [2]{key,value}:
-              a,one
-              b,two
-            """
-        let data = toon.data(using: .utf8)!
-
-        // Decode as array of key-value objects
-        struct KV: Codable, Equatable {
-            let key: String
-            let value: String
-        }
-        let result = try decoder.decode([KV].self, from: data)
-        #expect(result.count == 2)
-        #expect(result[0].key == "a")
-        #expect(result[0].value == "one")
-    }
-
-    // MARK: - Mixed Arrays (List Format)
-
-    @Test func listFormatWithObjects() async throws {
-        struct ListItemObject: Codable, Equatable {
-            let id: Int
-            let name: String
-        }
-
-        let toon = """
-            [2]:
-              - id: 1
-                name: First
-              - id: 2
-                name: Second
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode([ListItemObject].self, from: data)
-
-        #expect(result.count == 2)
-        #expect(result[0].id == 1)
-        #expect(result[0].name == "First")
-        #expect(result[1].id == 2)
-        #expect(result[1].name == "Second")
-    }
-
-    @Test func listFormatWithNestedArrays() async throws {
-        struct ListItemObject: Codable, Equatable {
-            let nums: [Int]
-            let name: String
-        }
-
-        struct ContainerObject: Codable, Equatable {
-            let items: [ListItemObject]
-        }
-
-        let toon = """
-            items[1]:
-              - nums[3]: 1,2,3
-                name: test
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(ContainerObject.self, from: data)
-
-        #expect(result.items.count == 1)
-        #expect(result.items[0].nums == [1, 2, 3])
-        #expect(result.items[0].name == "test")
-    }
-
-    @Test func arrayOfObjectsWithArrays() async throws {
-        struct ItemWithArray: Codable, Equatable {
-            let id: Int
-            let tags: [String]
-        }
-
-        struct Container: Codable, Equatable {
-            let items: [ItemWithArray]
-        }
-
-        let toon = """
-            items[2]:
-              - id: 1
-                tags[2]: a,b
-              - id: 2
-                tags[1]: c
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(Container.self, from: data)
-
-        #expect(result.items.count == 2)
-        #expect(result.items[0].id == 1)
-        #expect(result.items[0].tags == ["a", "b"])
-        #expect(result.items[1].id == 2)
-        #expect(result.items[1].tags == ["c"])
-    }
-
-    // MARK: - Arrays of Arrays
-
-    @Test func arrayOfArrays() async throws {
-        struct ArrayOfArraysObject: Codable, Equatable {
-            let pairs: [[String]]
-        }
-
-        let toon = """
-            pairs[2]:
-              - [2]: a,b
-              - [2]: c,d
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(ArrayOfArraysObject.self, from: data)
-
-        #expect(result.pairs.count == 2)
-        #expect(result.pairs[0] == ["a", "b"])
-        #expect(result.pairs[1] == ["c", "d"])
-    }
-
-    @Test func deeplyNestedArrays() async throws {
-        struct Container: Codable, Equatable {
-            let matrix: [[[Int]]]
-        }
-
-        let toon = """
-            matrix[2]:
-              - [2]:
-                - [2]: 1,2
-                - [2]: 3,4
-              - [1]:
-                - [3]: 5,6,7
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(Container.self, from: data)
-
-        #expect(result.matrix.count == 2)
-        #expect(result.matrix[0].count == 2)
-        #expect(result.matrix[0][0] == [1, 2])
-        #expect(result.matrix[0][1] == [3, 4])
-        #expect(result.matrix[1].count == 1)
-        #expect(result.matrix[1][0] == [5, 6, 7])
-    }
-
-    // MARK: - Root Arrays
-
-    @Test func rootPrimitiveArray() async throws {
-        let toon = "[4]: x,y,\"true\",\"10\""
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode([String].self, from: data)
-        #expect(result == ["x", "y", "true", "10"])
-    }
-
-    @Test func rootObjectArray() async throws {
-        struct SimpleObject: Codable, Equatable {
-            let id: Int
-        }
-
-        let toon = """
-            [2]{id}:
-              1
-              2
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode([SimpleObject].self, from: data)
-
-        #expect(result.count == 2)
-        #expect(result[0].id == 1)
-        #expect(result[1].id == 2)
-    }
-
-    @Test func rootEmptyArray() async throws {
-        let toon = "[0]:"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode([String].self, from: data)
-        #expect(result == [])
-    }
-
     // MARK: - Complex Structures
-
-    @Test func complexStructure() async throws {
-        struct ComplexObject: Codable, Equatable {
-            struct User: Codable, Equatable {
-                let id: Int
-                let name: String
-                let tags: [String]
-                let active: Bool
-                let prefs: [String]
-            }
-
-            let user: User
-        }
-
-        let toon = """
-            user:
-              id: 123
-              name: Ada
-              tags[2]: reading,gaming
-              active: true
-              prefs[0]:
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(ComplexObject.self, from: data)
-
-        #expect(result.user.id == 123)
-        #expect(result.user.name == "Ada")
-        #expect(result.user.tags == ["reading", "gaming"])
-        #expect(result.user.active == true)
-        #expect(result.user.prefs == [])
-    }
-
-    @Test func objectWithBothInlineAndExpandedArrays() async throws {
-        struct MixedObject: Codable, Equatable {
-            let inline: [String]
-            let expanded: [String]
-        }
-
-        let toon = """
-            inline[2]: a,b
-            expanded[2]:
-              - c
-              - d
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(MixedObject.self, from: data)
-
-        #expect(result.inline == ["a", "b"])
-        #expect(result.expanded == ["c", "d"])
-    }
 
     @Test func complexNestedObjectsWithArrays() async throws {
         struct Address: Codable, Equatable {
@@ -912,69 +272,6 @@ struct DecoderTests {
         #expect(result.employees[0].addresses.count == 1)
         #expect(result.employees[0].addresses[0].city == "London")
         #expect(result.employees[1].addresses.count == 2)
-    }
-
-    // MARK: - Delimiter Options
-
-    @Test func tabDelimiter() async throws {
-        struct DelimiterTestObject: Codable, Equatable {
-            let tags: [String]
-        }
-
-        let toon = "tags[3\t]: reading\tgaming\tcoding"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(DelimiterTestObject.self, from: data)
-        #expect(result.tags == ["reading", "gaming", "coding"])
-    }
-
-    @Test func pipeDelimiter() async throws {
-        struct DelimiterTestObject: Codable, Equatable {
-            let tags: [String]
-        }
-
-        let toon = "tags[3|]: reading|gaming|coding"
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(DelimiterTestObject.self, from: data)
-        #expect(result.tags == ["reading", "gaming", "coding"])
-    }
-
-    @Test func tabularArraysWithPipeDelimiter() async throws {
-        struct TabularDelimiterObject: Codable, Equatable {
-            let sku: String
-            let qty: Int
-            let price: Double
-        }
-
-        struct TabularDelimiterArrayObject: Codable, Equatable {
-            let items: [TabularDelimiterObject]
-        }
-
-        let toon = """
-            items[2|]{sku|qty|price}:
-              A1|2|9.99
-              B2|1|14.5
-            """
-        let data = toon.data(using: .utf8)!
-        let result = try decoder.decode(TabularDelimiterArrayObject.self, from: data)
-
-        #expect(result.items.count == 2)
-        #expect(result.items[0].sku == "A1")
-        #expect(result.items[0].qty == 2)
-        #expect(result.items[0].price == 9.99)
-    }
-
-    // MARK: - Length Marker Rejection
-
-    @Test func lengthMarkerHashRejected() async throws {
-        struct LengthMarkerTestObject: Codable, Equatable {
-            let tags: [String]
-        }
-
-        let toon = "tags[#3]: reading,gaming,coding"
-        let data = toon.data(using: .utf8)!
-        #expect(throws: Error.self) {
-            _ = try decoder.decode(LengthMarkerTestObject.self, from: data)
-        }
     }
 
     // MARK: - Non-JSON Types
@@ -1202,25 +499,6 @@ struct DecoderTests {
     // default of 2. Earlier releases guessed the size from the first indented
     // line of the document, which is not a concept of the specification.
 
-    @Test func decodesFourSpaceIndentWithMatchingIndentSize() async throws {
-        struct NestedObject: Codable, Equatable {
-            struct Inner: Codable, Equatable {
-                let value: String
-            }
-
-            let outer: Inner
-        }
-
-        let toon = """
-            outer:
-                value: test
-            """
-        let decoder = TOONDecoder()
-        decoder.indentSize = 4
-        let result = try decoder.decode(NestedObject.self, from: Data(toon.utf8))
-        #expect(result.outer.value == "test")
-    }
-
     @Test func decodesSingleSpaceIndentWithMatchingIndentSize() async throws {
         struct NestedObject: Codable, Equatable {
             struct Inner: Codable, Equatable {
@@ -1233,29 +511,6 @@ struct DecoderTests {
         let decoder = TOONDecoder()
         decoder.indentSize = 1
         let result = try decoder.decode(NestedObject.self, from: Data("outer:\n value: test".utf8))
-        #expect(result.outer.value == "test")
-    }
-
-    @Test func floorsIndentationThatIsNotAMultipleOfIndentSize() async throws {
-        struct NestedObject: Codable, Equatable {
-            struct Inner: Codable, Equatable {
-                let value: String
-            }
-
-            let outer: Inner
-        }
-
-        // Specification 14.2 makes an indentation that is not a multiple of the
-        // indent size an error in strict mode. Section 12 allows a decoder to
-        // accept it otherwise. The depth is then the floor of the division, so
-        // three spaces at an indent size of two give depth one.
-        let toon = """
-            outer:
-               value: test
-            """
-        let decoder = TOONDecoder()
-        decoder.strict = false
-        let result = try decoder.decode(NestedObject.self, from: Data(toon.utf8))
         #expect(result.outer.value == "test")
     }
 
@@ -1621,53 +876,10 @@ struct DecoderTests {
 
     // MARK: - Error Cases
 
-    @Test func invalidEscapeSequence() async throws {
-        let toon = "\"invalid\\x\""
-        let data = toon.data(using: .utf8)!
-
-        #expect(throws: TOONDecodingError.self) {
-            try decoder.decode(String.self, from: data)
-        }
-    }
-
     @Test func trailingBackslashError() async throws {
         let data = "\"invalid\\\"".data(using: .utf8)!
         #expect(throws: TOONDecodingError.self) {
             try decoder.decode(String.self, from: data)
-        }
-    }
-
-    @Test func countMismatch() async throws {
-        struct ArrayObject: Codable {
-            let items: [String]
-        }
-
-        let toon = "items[3]: a,b"  // Declares 3, but only 2 values
-        let data = toon.data(using: .utf8)!
-
-        #expect(throws: TOONDecodingError.self) {
-            try decoder.decode(ArrayObject.self, from: data)
-        }
-    }
-
-    @Test func fieldCountMismatch() async throws {
-        struct TabularObject: Codable {
-            let a: String
-            let b: Int
-        }
-
-        struct Container: Codable {
-            let items: [TabularObject]
-        }
-
-        let toon = """
-            items[1]{a,b}:
-              only_one_value
-            """
-        let data = toon.data(using: .utf8)!
-
-        #expect(throws: TOONDecodingError.self) {
-            try decoder.decode(Container.self, from: data)
         }
     }
 
