@@ -3,7 +3,7 @@
 [![CI](https://github.com/toon-format/toon-swift/actions/workflows/ci.yml/badge.svg)](https://github.com/toon-format/toon-swift/actions)
 [![Swift Version](https://img.shields.io/badge/swift-6.0+-orange.svg)](https://swift.org)
 [![SPEC v4.1](https://img.shields.io/badge/spec-v4.1-fef3c0?labelColor=1b1b1f)](https://github.com/toon-format/spec)
-[![License: MIT](https://img.shields.io/badge/license-MIT-fef3c0?labelColor=1b1b1f)](./LICENSE.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-fef3c0?labelColor=1b1b1f)](./LICENSE)
 
 Compact, human-readable serialization format for LLM contexts with **30-60% token reduction** vs JSON. 
 Combines YAML-like indentation with CSV-like tabular arrays. 
@@ -483,4 +483,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ## License
 
-MIT License – see [LICENSE.md](LICENSE.md) for details
+MIT License – see [LICENSE](LICENSE) for details
