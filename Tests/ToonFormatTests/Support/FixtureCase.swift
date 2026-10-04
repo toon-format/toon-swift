@@ -26,7 +26,7 @@ struct FixtureCase: Sendable, CustomTestStringConvertible {
     let note: String?
     let minSpecVersion: SpecVersion?
 
-    /// The identifier that ``FixtureExpectations`` uses.
+    /// The identifier that a failure prints, for example `decode/numbers.json#5`.
     var id: String { "\(file)#\(index)" }
 
     var testDescription: String { "\(id) — \(name)" }
