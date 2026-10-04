@@ -11,69 +11,55 @@ import Testing
 /// not match the name of a case, so it cannot select one fixture. To follow one
 /// case, run the suite and read the identifier that a failure prints, for
 /// example `decode/numbers.json#5`.
-///
-/// A case that the library does not satisfy yet is listed in
-/// ``FixtureExpectations/knownGaps``. The suite wraps such a case in
-/// `withKnownIssue`, which makes the run fail when the case starts to pass. A
-/// step of the migration therefore has to remove its own entries from that
-/// list, and cannot forget to.
 @Suite("Specification fixtures")
 struct FixtureTests {
     @Test("encode", arguments: Fixtures.encode)
     func encodeFixture(_ fixture: FixtureCase) throws {
-        try withKnownIssue(fixture.gapComment, isIntermittent: false) {
-            let encoder = TOONEncoder()
-            encoder.delimiter = fixture.options.delimiter
-            encoder.indentSize = fixture.options.indentSize
+        let encoder = TOONEncoder()
+        encoder.delimiter = fixture.options.delimiter
+        encoder.indentSize = fixture.options.indentSize
 
-            guard !fixture.shouldError else {
-                #expect(throws: (any Error).self) {
-                    try encoder.encode(fixture.input)
-                }
-                return
+        guard !fixture.shouldError else {
+            #expect(throws: (any Error).self) {
+                try encoder.encode(fixture.input)
             }
-
-            guard case let .string(expected) = fixture.expected else {
-                Issue.record("The expected value of an encode case must be a string.")
-                return
-            }
-
-            let data = try encoder.encode(fixture.input)
-            let actual = String(decoding: data, as: UTF8.self)
-            #expect(actual == expected)
-        } when: {
-            FixtureExpectations.knownGaps[fixture.id] != nil
+            return
         }
+
+        guard case let .string(expected) = fixture.expected else {
+            Issue.record("The expected value of an encode case must be a string.")
+            return
+        }
+
+        let data = try encoder.encode(fixture.input)
+        let actual = String(decoding: data, as: UTF8.self)
+        #expect(actual == expected)
     }
 
     @Test("decode", arguments: Fixtures.decode)
     func decodeFixture(_ fixture: FixtureCase) throws {
-        try withKnownIssue(fixture.gapComment, isIntermittent: false) {
-            guard case let .string(source) = fixture.input else {
-                Issue.record("The input of a decode case must be a string.")
-                return
-            }
-
-            let decoder = TOONDecoder()
-            decoder.indentSize = fixture.options.indentSize
-            decoder.strict = fixture.options.strict
-            let data = Data(source.utf8)
-
-            guard !fixture.shouldError else {
-                #expect(throws: (any Error).self) {
-                    try decoder.decode(TOONValue.self, from: data)
-                }
-                return
-            }
-
-            let actual = try decoder.decode(TOONValue.self, from: data)
-            #expect(
-                jsonModelEquals(actual, fixture.expected),
-                "decoded \(actual), expected \(fixture.expected)"
-            )
-        } when: {
-            FixtureExpectations.knownGaps[fixture.id] != nil
+        guard case let .string(source) = fixture.input else {
+            Issue.record("The input of a decode case must be a string.")
+            return
         }
+
+        let decoder = TOONDecoder()
+        decoder.indentSize = fixture.options.indentSize
+        decoder.strict = fixture.options.strict
+        let data = Data(source.utf8)
+
+        guard !fixture.shouldError else {
+            #expect(throws: (any Error).self) {
+                try decoder.decode(TOONValue.self, from: data)
+            }
+            return
+        }
+
+        let actual = try decoder.decode(TOONValue.self, from: data)
+        #expect(
+            jsonModelEquals(actual, fixture.expected),
+            "decoded \(actual), expected \(fixture.expected)"
+        )
     }
 
     /// The case count of every fixture file.
@@ -147,12 +133,5 @@ struct FixtureTests {
             return
         }
         #expect(sha.count == 40)
-    }
-}
-
-extension FixtureCase {
-    /// The reason that ``FixtureExpectations`` records for a known gap.
-    fileprivate var gapComment: Comment {
-        Comment(rawValue: FixtureExpectations.knownGaps[id] ?? "")
     }
 }
