@@ -1141,9 +1141,7 @@ private final class Parser {
             )
         }
 
-        if !current.isEmpty {
-            try fields.append(parseField(current, delimiter: delimiter, depth: depth))
-        }
+        try fields.append(parseField(current, delimiter: delimiter, depth: depth))
 
         return fields
     }
@@ -1153,6 +1151,9 @@ private final class Parser {
         let trimmed = field.trimmingSpaces()
 
         guard let braceIndex = indexOfGroupBrace(in: trimmed) else {
+            guard !trimmed.isEmpty else {
+                throw TOONDecodingError.invalidHeader("Empty field entry in the field list: \(field)")
+            }
             return FieldNode(name: try parseFieldName(trimmed))
         }
 
@@ -1165,9 +1166,6 @@ private final class Parser {
         let inner = String(trimmed[innerStart ..< trimmed.index(before: trimmed.endIndex)])
 
         let children = try parseFieldsList(inner, delimiter: delimiter, depth: depth + 1)
-        guard !children.isEmpty else {
-            throw TOONDecodingError.invalidHeader("Empty field group in: \(field)")
-        }
 
         return FieldNode(name: try parseFieldName(name), children: children)
     }
