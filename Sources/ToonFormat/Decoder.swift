@@ -659,13 +659,6 @@ private final class Parser {
             }
         }
 
-        // Check for list item starting with "- "
-        if content.hasPrefix("- ") {
-            throw TOONDecodingError.invalidFormat(
-                "Unexpected list item outside array context at line \(lastReadSourceLine)"
-            )
-        }
-
         // Parse as key: value
         guard let colonIndex = findKeyValueSeparator(in: content) else {
             throw TOONDecodingError.invalidFormat("Expected key: value at line \(lastReadSourceLine), got: \(content)")
@@ -758,7 +751,7 @@ private final class Parser {
             return .object([:])
         }
 
-        let (lineDepth, content) = trimIndentation(line)
+        let lineDepth = trimIndentation(line).depth
 
         if lineDepth < depth {
             // No nested content - empty object
@@ -770,12 +763,6 @@ private final class Parser {
                 line: sourceLine(currentLine),
                 message: "Expected indentation depth \(depth), got \(lineDepth)"
             )
-        }
-
-        // Check if it's a list item
-        if content.hasPrefix("- ") {
-            // This shouldn't happen here - arrays should be parsed via array header
-            throw TOONDecodingError.invalidFormat("Unexpected list item at line \(sourceLine(currentLine))")
         }
 
         // Parse as nested object
@@ -1629,11 +1616,6 @@ private final class Parser {
                 let (nextDepth, nextContent) = trimIndentation(nextLine)
 
                 if nextDepth != depth + 1 {
-                    break
-                }
-
-                // Check if it's another list item (shouldn't be at this depth)
-                if nextContent.hasPrefix("- ") {
                     break
                 }
 
