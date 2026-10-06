@@ -623,16 +623,19 @@ private final class Parser {
                 parsedHeader = nil
             }
 
-            if let header = parsedHeader {
-                // Specification 6 allows a keyless header only at the document
-                // root and, without a field list, as a list item.
-                if header.key == nil, strict {
+            // Specification 6 allows a keyless header only at the document
+            // root and, without a field list, as a list item.
+            if let header = parsedHeader, header.key == nil {
+                if strict {
                     throw TOONDecodingError.invalidHeader(
                         "A keyless array header is not allowed in object field position: \(content)"
                     )
                 }
-                let array = try parseArrayContent(header: header, atDepth: depth)
-                return (header.key ?? "", array)
+                parsedHeader = nil
+            }
+
+            if let header = parsedHeader, let key = header.key {
+                return (key, try parseArrayContent(header: header, atDepth: depth))
             }
         }
 
