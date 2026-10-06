@@ -732,7 +732,7 @@ private final class Parser {
             let char = text[index]
             if escaped {
                 escaped = false
-            } else if char == "\\" {
+            } else if inQuotes, char == "\\" {
                 escaped = true
             } else if char == "\"" {
                 inQuotes.toggle()
@@ -782,7 +782,7 @@ private final class Parser {
                 escaped = false
                 continue
             }
-            if char == "\\" {
+            if inQuotes, char == "\\" {
                 escaped = true
                 continue
             }
@@ -987,7 +987,7 @@ private final class Parser {
             let char = text[index]
             if escaped {
                 escaped = false
-            } else if char == "\\" {
+            } else if inQuotes, char == "\\" {
                 escaped = true
             } else if char == "\"" {
                 inQuotes.toggle()
@@ -1039,7 +1039,7 @@ private final class Parser {
                 continue
             }
 
-            if char == "\\" {
+            if inQuotes, char == "\\" {
                 escaped = true
                 current.append(char)
                 continue
@@ -1136,7 +1136,7 @@ private final class Parser {
             let char = field[index]
             if escaped {
                 escaped = false
-            } else if char == "\\" {
+            } else if inQuotes, char == "\\" {
                 escaped = true
             } else if char == "\"" {
                 inQuotes.toggle()
@@ -1372,7 +1372,7 @@ private final class Parser {
             let char = text[index]
             if escaped {
                 escaped = false
-            } else if char == "\\" {
+            } else if inQuotes, char == "\\" {
                 escaped = true
             } else if char == "\"" {
                 inQuotes.toggle()
@@ -1619,7 +1619,7 @@ private final class Parser {
                 continue
             }
 
-            if char == "\\" {
+            if inQuotes, char == "\\" {
                 escaped = true
                 current.append(char)
                 continue
