@@ -1162,6 +1162,10 @@ private final class Parser {
         }
 
         let name = String(trimmed[..<braceIndex])
+        guard !name.isEmpty else {
+            throw TOONDecodingError.invalidHeader("A nested field group without a name: \(field)")
+        }
+
         let innerStart = trimmed.index(after: braceIndex)
         let inner = String(trimmed[innerStart ..< trimmed.index(before: trimmed.endIndex)])
 
