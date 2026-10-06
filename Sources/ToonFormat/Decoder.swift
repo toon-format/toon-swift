@@ -367,8 +367,20 @@ private final class Parser {
     }
 
     func parse() throws -> Value {
+        // An indented line before the first line at depth 0 belongs to no
+        // scope: strict mode rejects it, and the root form starts after it.
+        var skippedLeadingLine = false
+        while let line = peekLine(), line.isEmpty || trimIndentation(line).depth > 0 {
+            if line.isEmpty {
+                currentLine += 1
+            } else {
+                try skipOverIndentedLine(expectedDepth: 0)
+                skippedLeadingLine = true
+            }
+        }
+
         // Filter out empty lines for root detection, but keep track of original positions
-        let nonEmptyLines = lines.enumerated().filter { !$0.element.isEmpty }
+        let nonEmptyLines = lines.enumerated().dropFirst(currentLine).filter { !$0.element.isEmpty }
 
         if nonEmptyLines.isEmpty {
             // Empty document = empty object
@@ -376,20 +388,17 @@ private final class Parser {
         }
 
         // Detect root form
-        let firstNonEmptyLine = nonEmptyLines[0].element
-        // Every root form below opens at depth 0. An indented first line falls
-        // through to the object reader, which treats it as over-indented.
-        let (firstDepth, firstContent) = trimIndentation(firstNonEmptyLine)
+        let firstContent = trimIndentation(nonEmptyLines[0].element).content
 
         // Specification 4 gives the literal token `[]` at the root the meaning
         // of an empty array.
-        if firstDepth == 0, firstContent == "[]", nonEmptyLines.count == 1 {
+        if firstContent == "[]", nonEmptyLines.count == 1 {
             return .array([])
         }
 
         // Root array: first line is a valid array header WITHOUT a key (e.g., "[3]:" not "items[3]:")
         // An array header without key starts with "[" immediately
-        if firstDepth == 0, firstContent.hasPrefix("["), let header = try? parseArrayHeader(String(firstContent)),
+        if firstContent.hasPrefix("["), let header = try? parseArrayHeader(String(firstContent)),
             strict || header.fields == nil || !hasContentAfterHeaderColon(String(firstContent))
         {
             currentLine = nonEmptyLines[0].offset
@@ -400,7 +409,7 @@ private final class Parser {
 
         // Single primitive: exactly one non-empty line that's not an object key-value pair
         // A key-value pair has an unquoted colon, even one inside brackets
-        if nonEmptyLines.count == 1, firstDepth == 0 {
+        if nonEmptyLines.count == 1, !skippedLeadingLine {
             let contentStr = String(firstContent)
             if findUnquotedColon(in: firstContent) == nil {
                 return try parsePrimitiveValue(contentStr)
@@ -408,7 +417,6 @@ private final class Parser {
         }
 
         // Default: object
-        currentLine = 0
         return try parseObject(atDepth: 0)
     }
 
