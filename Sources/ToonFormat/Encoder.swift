@@ -2,7 +2,7 @@ import Foundation
 
 /// An encoder that converts Swift values into TOON format.
 ///
-/// This encoder conforms to the TOON (Token-Oriented Object Notation) specification version 4.2.
+/// This encoder conforms to the TOON (Token-Oriented Object Notation) specification version 4.3.
 /// For more information, see https://github.com/toon-format/spec
 public final class TOONEncoder {
     /// The number of spaces of one indentation level.
