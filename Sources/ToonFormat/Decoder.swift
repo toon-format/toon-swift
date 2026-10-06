@@ -305,6 +305,11 @@ private final class Parser {
     private let limits: TOONDecoder.DecodingLimits
     private var currentLine: Int = 0
 
+    /// The depth of the elements of the outermost header whose span is open,
+    /// or `nil` outside every span. A line at this depth or deeper still
+    /// belongs to that span.
+    private var openSpanDepth: Int?
+
     init(
         text: String,
         indentSize: Int,
@@ -450,53 +455,29 @@ private final class Parser {
         return line
     }
 
-    /// Skips the blank lines, and rejects one that sits inside a scope.
+    /// Skips the blank lines, and in strict mode rejects them inside a header span.
     ///
     /// Specification 12 forbids a blank line inside the span of a header. The
     /// span runs from the first row, entry or item of the scope. It ends at the
-    /// last line of the content of that scope. A blank line before the first
-    /// one is therefore ignorable, and so is a blank line after the last one. A
-    /// blank line is interior when the scope has already produced an element
-    /// and the next line still belongs to the scope.
-    private func skipBlankLines(insideScopeAtDepth depth: Int, hasElement: Bool) throws {
-        guard currentLine < lines.count, lines[currentLine].isEmpty else { return }
-
-        guard let nextDepth = depthOfNextContentLine() else {
-            // Only blank lines remain, so nothing encloses them.
-            while currentLine < lines.count, lines[currentLine].isEmpty {
-                currentLine += 1
-            }
-            return
-        }
-
-        // The next line is shallower, so the blank lines sit after this scope
-        // and belong to an enclosing one. Leave them for it to judge.
-        if nextDepth < depth { return }
-
+    /// last line of the content of that scope, which may sit deep inside its
+    /// last item. A blank line before the first one is therefore ignorable,
+    /// and so is a blank line after the last one.
+    ///
+    /// The check reads ``openSpanDepth`` rather than the scope at hand. A
+    /// nested scope that has no element yet, or an object inside a list item,
+    /// still sits inside the span of the enclosing header.
+    private func skipBlankLines() throws {
         let firstBlank = currentLine
         while currentLine < lines.count, lines[currentLine].isEmpty {
             currentLine += 1
         }
 
-        if strict, hasElement {
+        guard strict, currentLine > firstBlank, currentLine < lines.count,
+            let spanDepth = openSpanDepth
+        else { return }
+
+        if trimIndentation(lines[currentLine]).depth >= spanDepth {
             throw TOONDecodingError.unexpectedBlankLine(line: sourceLine(firstBlank))
-        }
-    }
-
-    /// The depth of the next line that is not blank, without consuming
-    /// anything. Returns `nil` at the end of the document.
-    private func depthOfNextContentLine() -> Int? {
-        var index = currentLine
-        while index < lines.count, lines[index].isEmpty {
-            index += 1
-        }
-        guard index < lines.count else { return nil }
-        return trimIndentation(lines[index]).depth
-    }
-
-    private func skipEmptyLines() {
-        while currentLine < lines.count, lines[currentLine].isEmpty {
-            currentLine += 1
         }
     }
 
@@ -559,7 +540,7 @@ private final class Parser {
         while let line = peekLine() {
             // Skip empty lines between object entries
             if line.isEmpty {
-                _ = consumeLine()
+                try skipBlankLines()
                 continue
             }
 
@@ -694,7 +675,7 @@ private final class Parser {
     }
 
     private func parseNestedValue(atDepth depth: Int) throws -> Value {
-        skipEmptyLines()
+        try skipBlankLines()
 
         guard let line = peekLine() else {
             return .object([:])
@@ -1301,13 +1282,15 @@ private final class Parser {
 
         var values: ObjectStorage = [:]
         var expectedDepth = depth + 1
+        let enclosingSpanDepth = openSpanDepth
+        defer { openSpanDepth = enclosingSpanDepth }
         let width = fields.leafCount
 
         // Specification 14.1 states that a declared length never terminates or
         // truncates a scope. The loop therefore reads to the end of the scope,
         // then checks the length.
         while true {
-            try skipBlankLines(insideScopeAtDepth: depth + 1, hasElement: !values.isEmpty)
+            try skipBlankLines()
 
             guard let line = peekLine(), !line.isEmpty else { break }
 
@@ -1328,6 +1311,7 @@ private final class Parser {
             }
 
             _ = consumeLine()
+            openSpanDepth = openSpanDepth ?? depth + 1
 
             // Specification 9.5: a line at entry depth without an unquoted
             // colon is an error in strict mode, and may be skipped otherwise.
@@ -1409,12 +1393,14 @@ private final class Parser {
     ) throws -> [Value] {
         var rows: [Value] = []
         var expectedDepth = depth + 1
+        let enclosingSpanDepth = openSpanDepth
+        defer { openSpanDepth = enclosingSpanDepth }
 
         // Specification 14.1 states that a declared length never terminates or
         // truncates a scope. The scope ends where the depth decreases, and the
         // length is a check afterwards.
         while true {
-            try skipBlankLines(insideScopeAtDepth: depth + 1, hasElement: !rows.isEmpty)
+            try skipBlankLines()
 
             guard let line = peekLine(), !line.isEmpty else { break }
 
@@ -1445,6 +1431,7 @@ private final class Parser {
             }
 
             _ = consumeLine()
+            openSpanDepth = openSpanDepth ?? depth + 1
 
             let cells = try parseDelimitedValues(String(content), delimiter: delimiter)
 
@@ -1480,12 +1467,14 @@ private final class Parser {
     private func parseListItems(count: Int, delimiter: String, atDepth depth: Int) throws -> [Value] {
         var items: [Value] = []
         var expectedDepth = depth + 1
+        let enclosingSpanDepth = openSpanDepth
+        defer { openSpanDepth = enclosingSpanDepth }
 
         // Specification 14.1 states that a declared length never terminates or
         // truncates a scope. The loop therefore reads to the end of the scope,
         // then checks the length.
         while true {
-            try skipBlankLines(insideScopeAtDepth: depth + 1, hasElement: !items.isEmpty)
+            try skipBlankLines()
 
             guard let line = peekLine(), !line.isEmpty else { break }
 
@@ -1511,6 +1500,7 @@ private final class Parser {
             guard content.hasPrefix("- ") || content == "-" else { break }
 
             _ = consumeLine()
+            openSpanDepth = openSpanDepth ?? depth + 1
 
             let itemContent = content.hasPrefix("- ") ? String(content.dropFirst(2)) : ""
             let item = try parseListItemContent(itemContent, atDepth: expectedDepth, delimiter: delimiter)
@@ -1583,16 +1573,10 @@ private final class Parser {
                 }
             }
 
-            // Parse additional fields at depth + 1. The fields of a list-item
-            // object are the content of its scope, so a blank line among them
-            // is interior and section 12 rejects it.
+            // Parse additional fields at depth + 1.
             while let nextLine = peekLine() {
                 if nextLine.isEmpty {
-                    // Leave the blank lines for the enclosing scope when they
-                    // end this item, so that the list itself judges them.
-                    guard let nextDepth = depthOfNextContentLine(), nextDepth >= depth + 1
-                    else { break }
-                    try skipBlankLines(insideScopeAtDepth: depth + 1, hasElement: true)
+                    try skipBlankLines()
                     continue
                 }
 
