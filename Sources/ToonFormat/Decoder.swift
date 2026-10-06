@@ -398,9 +398,9 @@ private final class Parser {
 
         // Root array: first line is a valid array header WITHOUT a key (e.g., "[3]:" not "items[3]:")
         // An array header without key starts with "[" immediately
-        if firstContent.hasPrefix("["), try parseHeaderIfPresent(String(firstContent)) != nil {
-            currentLine = nonEmptyLines[0].offset
-            let root = try parseArrayAtCurrentLine(depth: 0, key: nil)
+        if firstContent.hasPrefix("["), let header = try parseHeaderIfPresent(String(firstContent)) {
+            currentLine = nonEmptyLines[0].offset + 1
+            let root = try parseArrayContent(header: header, atDepth: 0)
             try rejectTrailingContentAfterRoot()
             return root
         }
@@ -702,17 +702,19 @@ private final class Parser {
         let inlineContent: Substring
     }
 
-    /// Whether the line is an array-header line, per specification 5.2.
+    /// The first unquoted bracket of an array-header line, or `nil` when the
+    /// line is not one, per specification 5.2.
     ///
     /// The line is a header when an unquoted bracket precedes the first
-    /// unquoted colon. A bracket inside a quoted key, or after the colon, is
+    /// unquoted colon. A bracket inside a quoted span, or after the colon, is
     /// content. A line without an unquoted colon is never a header.
-    private func isArrayHeaderLine(_ content: String) -> Bool {
+    private func headerBracketIndex(_ content: String) -> String.Index? {
         var inQuotes = false
         var escaped = false
-        var sawBracket = false
+        var bracketIndex: String.Index?
 
-        for char in content {
+        for index in content.indices {
+            let char = content[index]
             if escaped {
                 escaped = false
                 continue
@@ -726,11 +728,11 @@ private final class Parser {
                 continue
             }
             guard !inQuotes else { continue }
-            if char == "[" { sawBracket = true }
-            if char == ":" { return sawBracket }
+            if char == "[", bracketIndex == nil { bracketIndex = index }
+            if char == ":" { return bracketIndex }
         }
 
-        return false
+        return nil
     }
 
     /// Parses an array header, or returns `nil` when the line is not one.
@@ -741,9 +743,9 @@ private final class Parser {
     /// Specification 6 lets a decoder outside strict mode fall back to a
     /// key-value pair, so only strict mode reports the defect.
     private func parseHeaderIfPresent(_ content: String) throws -> ArrayHeader? {
-        guard isArrayHeaderLine(content) else { return nil }
+        guard let bracketIndex = headerBracketIndex(content) else { return nil }
         do {
-            let header = try parseArrayHeader(content)
+            let header = try parseArrayHeader(content, bracketIndex: bracketIndex)
             // Specification 6 forbids content after the colon of a header that
             // carries a field list. Outside strict mode the line reads as a
             // key-value line; strict mode reports it in parseArrayContent.
@@ -755,7 +757,7 @@ private final class Parser {
         }
     }
 
-    private func parseArrayHeader(_ content: String) throws -> ArrayHeader {
+    private func parseArrayHeader(_ content: String, bracketIndex: String.Index) throws -> ArrayHeader {
         // Pattern: [key][N{delimiter}]{fields}:
         // Examples: [3]:, key[2]:, items[3]{a,b,c}:, items[2|]{a|b}:
 
@@ -771,7 +773,7 @@ private final class Parser {
             let quotedKey = String(remaining[remaining.index(after: remaining.startIndex) ..< endQuote])
             key = try unescapeString(quotedKey)
             remaining = remaining[remaining.index(after: endQuote)...]
-        } else if let bracketIndex = remaining.firstIndex(of: "[") {
+        } else {
             let keyPart = remaining[..<bracketIndex]
             if !keyPart.isEmpty {
                 // Specification 6 forbids whitespace between a key and its
@@ -1119,16 +1121,6 @@ private final class Parser {
         if length > limits.maxArrayLength {
             throw TOONDecodingError.arrayLengthLimitExceeded(length: length, limit: limits.maxArrayLength)
         }
-    }
-
-    private func parseArrayAtCurrentLine(depth: Int, key _: String?) throws -> Value {
-        guard let line = consumeLine() else {
-            throw TOONDecodingError.invalidFormat("Expected array header")
-        }
-
-        let (_, content) = trimIndentation(line)
-        let header = try parseArrayHeader(String(content))
-        return try parseArrayContent(header: header, atDepth: depth)
     }
 
     private func parseArrayContent(header: ArrayHeader, atDepth depth: Int) throws -> Value {
