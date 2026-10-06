@@ -725,12 +725,25 @@ private final class Parser {
         return nil
     }
 
+    /// Reads a key token: the key of a key-value line, an entry key, or a
+    /// field name.
     private func parseKey(_ keyPart: String) throws -> String {
         let trimmed = keyPart.trimmingSpaces()
 
-        if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") {
-            // Quoted key
-            let inner = String(trimmed.dropFirst().dropLast())
+        // A key that begins with a quote must end at its closing quote, like
+        // a quoted value. `"a"\t` is not the key `a`.
+        if trimmed.hasPrefix("\"") {
+            guard let closing = findClosingQuote(in: trimmed[...]) else {
+                throw TOONDecodingError.invalidFormat(
+                    "Unterminated quoted key at line \(lastReadSourceLine)"
+                )
+            }
+            guard trimmed.index(after: closing) == trimmed.endIndex else {
+                throw TOONDecodingError.invalidFormat(
+                    "Characters after the closing quote of a key at line \(lastReadSourceLine)"
+                )
+            }
+            let inner = String(trimmed[trimmed.index(after: trimmed.startIndex) ..< closing])
             return try unescapeString(inner)
         }
 
@@ -1154,7 +1167,7 @@ private final class Parser {
             guard !trimmed.isEmpty else {
                 throw TOONDecodingError.invalidHeader("Empty field entry in the field list: \(field)")
             }
-            return FieldNode(name: try parseFieldName(trimmed))
+            return FieldNode(name: try parseKey(trimmed))
         }
 
         guard trimmed.hasSuffix("}") else {
@@ -1178,7 +1191,7 @@ private final class Parser {
 
         let children = try parseFieldsList(inner, delimiter: delimiter, depth: depth + 1)
 
-        return FieldNode(name: try parseFieldName(name), children: children)
+        return FieldNode(name: try parseKey(name), children: children)
     }
 
     /// The position of the brace that opens a nested group, skipping a brace
@@ -1203,15 +1216,6 @@ private final class Parser {
         }
 
         return nil
-    }
-
-    private func parseFieldName(_ field: String) throws -> String {
-        let trimmed = field.trimmingSpaces()
-        if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") {
-            let inner = String(trimmed.dropFirst().dropLast())
-            return try unescapeString(inner)
-        }
-        return trimmed
     }
 
     /// Builds one row object by walking the field tree against the cells.
@@ -1376,7 +1380,7 @@ private final class Parser {
                 continue
             }
 
-            let entryKey = try parseFieldName(String(content[..<colonIndex]))
+            let entryKey = try parseKey(String(content[..<colonIndex]))
             let rest = content[content.index(after: colonIndex)...].trimmingLeadingSpace()
             let cells = try parseDelimitedValues(String(rest), delimiter: header.delimiter)
 
