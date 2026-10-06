@@ -398,9 +398,7 @@ private final class Parser {
 
         // Root array: first line is a valid array header WITHOUT a key (e.g., "[3]:" not "items[3]:")
         // An array header without key starts with "[" immediately
-        if firstContent.hasPrefix("["), let header = try? parseArrayHeader(String(firstContent)),
-            strict || header.fields == nil || header.inlineContent.isEmpty
-        {
+        if firstContent.hasPrefix("["), try parseHeaderIfPresent(String(firstContent)) != nil {
             currentLine = nonEmptyLines[0].offset
             let root = try parseArrayAtCurrentLine(depth: 0, key: nil)
             try rejectTrailingContentAfterRoot()
@@ -600,40 +598,16 @@ private final class Parser {
         // Specification 5.2 classifies the line before anything reads it. A
         // line whose first unquoted colon precedes any unquoted bracket is a
         // key-value line, never a header.
-        if isArrayHeaderLine(content) {
-            var parsedHeader: ArrayHeader?
-            do {
-                parsedHeader = try parseArrayHeader(content)
-            } catch {
-                // A malformed header is an error in strict mode. Non-strict
-                // mode may fall through to the key-value reading below.
-                if strict { throw error }
+        if let header = try parseHeaderIfPresent(content) {
+            if let key = header.key {
+                return (key, try parseArrayContent(header: header, atDepth: depth))
             }
-
-            if let header = parsedHeader, header.fields != nil, !header.inlineContent.isEmpty {
-                // Specification 6 forbids content after the colon of a header
-                // that carries a field list: its rows live on the lines below.
-                if strict {
-                    throw TOONDecodingError.invalidHeader(
-                        "Content after the colon of a header that carries a field list: \(content)"
-                    )
-                }
-                parsedHeader = nil
-            }
-
             // Specification 6 allows a keyless header only at the document
             // root and, without a field list, as a list item.
-            if let header = parsedHeader, header.key == nil {
-                if strict {
-                    throw TOONDecodingError.invalidHeader(
-                        "A keyless array header is not allowed in object field position: \(content)"
-                    )
-                }
-                parsedHeader = nil
-            }
-
-            if let header = parsedHeader, let key = header.key {
-                return (key, try parseArrayContent(header: header, atDepth: depth))
+            if strict {
+                throw TOONDecodingError.invalidHeader(
+                    "A keyless array header is not allowed in object field position: \(content)"
+                )
             }
         }
 
@@ -769,7 +743,12 @@ private final class Parser {
     private func parseHeaderIfPresent(_ content: String) throws -> ArrayHeader? {
         guard isArrayHeaderLine(content) else { return nil }
         do {
-            return try parseArrayHeader(content)
+            let header = try parseArrayHeader(content)
+            // Specification 6 forbids content after the colon of a header that
+            // carries a field list. Outside strict mode the line reads as a
+            // key-value line; strict mode reports it in parseArrayContent.
+            if !strict, header.fields != nil, !header.inlineContent.isEmpty { return nil }
+            return header
         } catch {
             if strict { throw error }
             return nil
@@ -1474,7 +1453,8 @@ private final class Parser {
         // This returns a bare array, not an object with an array field
         // Specification 6 allows a keyless header as a list item only without
         // a field list. Outside strict mode the line reads as a key-value line.
-        if content.hasPrefix("["), let header = try parseHeaderIfPresent(content) {
+        let header = try parseHeaderIfPresent(content)
+        if let header, header.key == nil {
             if header.fields == nil {
                 return try parseArrayContent(header: header, atDepth: depth)
             }
@@ -1493,12 +1473,7 @@ private final class Parser {
             // A header on the hyphen line describes the first field of the
             // list-item object. That field sits one level below the hyphen
             // line, so its rows sit two levels below it (specification 10).
-            // Content after the colon of a header that carries a field list
-            // reads as a key-value line outside strict mode, as it does in
-            // parseKeyValuePair.
-            if let header = try parseHeaderIfPresent(content), let headerKey = header.key,
-                strict || header.fields == nil || header.inlineContent.isEmpty
-            {
+            if let header, let headerKey = header.key {
                 objectValues[headerKey] = try parseArrayContent(header: header, atDepth: depth + 1)
             } else {
                 let key = try parseKey(String(content[..<colonIndex]))
