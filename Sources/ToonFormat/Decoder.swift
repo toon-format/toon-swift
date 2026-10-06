@@ -1187,6 +1187,14 @@ private final class Parser {
         return .object(values)
     }
 
+    /// Bounds the elements an array actually holds. The declared length is
+    /// no bound: it never terminates a scope (specification 14.1).
+    private func checkArrayLength(_ length: Int) throws {
+        if length > limits.maxArrayLength {
+            throw TOONDecodingError.arrayLengthLimitExceeded(length: length, limit: limits.maxArrayLength)
+        }
+    }
+
     private func parseArrayAtCurrentLine(depth: Int, key _: String?) throws -> Value {
         guard let line = consumeLine() else {
             throw TOONDecodingError.invalidFormat("Expected array header")
@@ -1198,12 +1206,6 @@ private final class Parser {
     }
 
     private func parseArrayContent(header: ArrayHeader, atDepth depth: Int) throws -> Value {
-        // Outside strict mode nothing checks the declared length, so a length
-        // beyond the limit is no error either.
-        if strict, header.count > limits.maxArrayLength {
-            throw TOONDecodingError.arrayLengthLimitExceeded(length: header.count, limit: limits.maxArrayLength)
-        }
-
         // Specification 6 forbids content after the colon of a header that
         // carries a field list: the rows live on the lines below it.
         if strict, header.fields != nil, headerCarriesInlineContent() {
@@ -1234,6 +1236,7 @@ private final class Parser {
             if !inlineValues.isEmpty {
                 // Inline primitive array
                 let values = try parseDelimitedValues(String(inlineValues), delimiter: header.delimiter)
+                try checkArrayLength(values.count)
                 if strict, values.count != header.count {
                     throw TOONDecodingError.countMismatch(
                         expected: header.count,
@@ -1354,6 +1357,7 @@ private final class Parser {
             let entry = materializeRow(fields: fields, cells: cells, cursor: &cursor)
 
             try storeKey(entryKey, value: entry, into: &values)
+            try checkArrayLength(values.count)
         }
 
         if strict, values.count != header.count {
@@ -1460,6 +1464,7 @@ private final class Parser {
             }
 
             var cursor = 0
+            try checkArrayLength(rows.count + 1)
             rows.append(materializeRow(fields: fields, cells: cells, cursor: &cursor))
         }
 
@@ -1514,6 +1519,7 @@ private final class Parser {
 
             let itemContent = content.hasPrefix("- ") ? String(content.dropFirst(2)) : ""
             let item = try parseListItemContent(itemContent, atDepth: expectedDepth, delimiter: delimiter)
+            try checkArrayLength(items.count + 1)
             items.append(item)
         }
 
