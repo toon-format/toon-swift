@@ -500,6 +500,23 @@ private final class Parser {
         }
     }
 
+    /// Consumes a line that sits deeper than the content of its scope, after
+    /// a line that opened no scope.
+    ///
+    /// Such a line belongs to no scope. Strict mode rejects it. Outside strict
+    /// mode the line is skipped, unless it is a scalar line, which no mode
+    /// accepts.
+    private func skipOverIndentedLine(expectedDepth: Int) throws {
+        let (lineDepth, content) = trimIndentation(lines[currentLine])
+        if strict || findUnquotedColon(in: content) == nil {
+            throw TOONDecodingError.invalidIndentation(
+                line: sourceLine(currentLine),
+                message: "Expected indentation depth \(expectedDepth), got \(lineDepth)"
+            )
+        }
+        currentLine += 1
+    }
+
     /// Stores a sibling key, per TOON specification 14.3.
     ///
     /// A repeated key is an error in strict mode. Otherwise the last write
@@ -547,12 +564,9 @@ private final class Parser {
                 break
             }
 
-            // If depth doesn't match expected, error
             if lineDepth != depth {
-                throw TOONDecodingError.invalidIndentation(
-                    line: sourceLine(currentLine),
-                    message: "Expected indentation depth \(depth), got \(lineDepth)"
-                )
+                try skipOverIndentedLine(expectedDepth: depth)
+                continue
             }
 
             _ = consumeLine()
@@ -1287,8 +1301,13 @@ private final class Parser {
             guard let line = peekLine(), !line.isEmpty else { break }
 
             let (lineDepth, content) = trimIndentation(line)
-            if lineDepth != expectedDepth {
+            if lineDepth < expectedDepth {
                 break
+            }
+
+            if lineDepth > expectedDepth {
+                try skipOverIndentedLine(expectedDepth: expectedDepth)
+                continue
             }
 
             _ = consumeLine()
@@ -1389,10 +1408,8 @@ private final class Parser {
             }
 
             if lineDepth > expectedDepth {
-                throw TOONDecodingError.invalidIndentation(
-                    line: sourceLine(currentLine),
-                    message: "Expected indentation depth \(expectedDepth), got \(lineDepth)"
-                )
+                try skipOverIndentedLine(expectedDepth: expectedDepth)
+                continue
             }
 
             // A line whose first unquoted colon comes before its first
@@ -1456,10 +1473,8 @@ private final class Parser {
             }
 
             if lineDepth > expectedDepth {
-                throw TOONDecodingError.invalidIndentation(
-                    line: sourceLine(currentLine),
-                    message: "Expected indentation depth \(expectedDepth), got \(lineDepth)"
-                )
+                try skipOverIndentedLine(expectedDepth: expectedDepth)
+                continue
             }
 
             // A line of the scope that is not a list item ends it. The bare
@@ -1554,8 +1569,13 @@ private final class Parser {
 
                 let (nextDepth, nextContent) = trimIndentation(nextLine)
 
-                if nextDepth != depth + 1 {
+                if nextDepth < depth + 1 {
                     break
+                }
+
+                if nextDepth > depth + 1 {
+                    try skipOverIndentedLine(expectedDepth: depth + 1)
+                    continue
                 }
 
                 _ = consumeLine()
