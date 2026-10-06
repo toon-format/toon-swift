@@ -1337,6 +1337,11 @@ private final class Parser {
 
     /// The position of the first colon that sits outside a quoted span.
     private func findUnquotedColon(in text: Substring) -> Substring.Index? {
+        findUnquoted(":", in: text)
+    }
+
+    /// The position of the first occurrence of `target` outside a quoted span.
+    private func findUnquoted(_ target: Character, in text: Substring) -> Substring.Index? {
         var inQuotes = false
         var escaped = false
         var index = text.startIndex
@@ -1349,7 +1354,7 @@ private final class Parser {
                 escaped = true
             } else if char == "\"" {
                 inQuotes.toggle()
-            } else if char == ":", !inQuotes {
+            } else if char == target, !inQuotes {
                 return index
             }
             index = text.index(after: index)
@@ -1386,6 +1391,15 @@ private final class Parser {
                     line: sourceLine(currentLine),
                     message: "Expected indentation depth \(expectedDepth), got \(lineDepth)"
                 )
+            }
+
+            // A line whose first unquoted colon comes before its first
+            // unquoted delimiter is a key-value line, which ends the rows.
+            if let colon = findUnquotedColon(in: content) {
+                let separator = findUnquoted(Character(delimiter), in: content)
+                if separator.map({ colon < $0 }) ?? true {
+                    break
+                }
             }
 
             _ = consumeLine()
