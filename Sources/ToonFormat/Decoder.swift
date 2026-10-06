@@ -1162,8 +1162,15 @@ private final class Parser {
         }
 
         let name = String(trimmed[..<braceIndex])
-        guard !name.isEmpty else {
+        guard let last = name.last else {
             throw TOONDecodingError.invalidHeader("A nested field group without a name: \(field)")
+        }
+        // Token trimming stops short of a nested group, so whitespace before
+        // its brace is a defect, not padding.
+        if last == " " || last == "\t" {
+            throw TOONDecodingError.invalidHeader(
+                "Whitespace between a field name and its nested field group: \(field)"
+            )
         }
 
         let innerStart = trimmed.index(after: braceIndex)
