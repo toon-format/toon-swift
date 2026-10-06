@@ -925,9 +925,12 @@ private final class Parser {
             remaining = remaining.dropFirst()
         }
 
-        guard let count = Int(countStr) else {
+        guard !countStr.isEmpty else {
             throw TOONDecodingError.invalidHeader("Invalid count in array header: \(content)")
         }
+        // A length beyond the range of Int still forms a header. No scope
+        // holds Int.max elements, so the count stays unmet.
+        let count = Int(countStr) ?? .max
 
         // Specification 6 forbids a leading zero in the length.
         if countStr.count > 1, countStr.hasPrefix("0") {
@@ -1234,8 +1237,9 @@ private final class Parser {
     }
 
     private func parseArrayContent(header: ArrayHeader, atDepth depth: Int) throws -> Value {
-        // Check array length limit
-        if header.count > limits.maxArrayLength {
+        // Outside strict mode nothing checks the declared length, so a length
+        // beyond the limit is no error either.
+        if strict, header.count > limits.maxArrayLength {
             throw TOONDecodingError.arrayLengthLimitExceeded(length: header.count, limit: limits.maxArrayLength)
         }
 
