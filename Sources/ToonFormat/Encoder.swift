@@ -494,11 +494,12 @@ public final class TOONEncoder {
                     )
                     writeTabularRows(rows: array, header: header, output: &output, depth: depth + 2)
                 } else {
-                    write(
-                        depth: depth,
-                        content: "- \(encodedKey)[\(array.count)]:",
-                        to: &output
+                    let headerStr = formatHeader(
+                        length: array.count,
+                        key: firstKey,
+                        delimiter: delimiter.rawValue
                     )
+                    write(depth: depth, content: "- \(headerStr)", to: &output)
                     for item in array {
                         if let values = item.objectValue {
                             encodeObjectAsListItem(
@@ -510,11 +511,12 @@ public final class TOONEncoder {
                     }
                 }
             } else {
-                write(
-                    depth: depth,
-                    content: "- \(encodedKey)[\(array.count)]:",
-                    to: &output
+                let headerStr = formatHeader(
+                    length: array.count,
+                    key: firstKey,
+                    delimiter: delimiter.rawValue
                 )
+                write(depth: depth, content: "- \(headerStr)", to: &output)
                 for item in array {
                     switch item {
                     case .null, .bool, .int, .double, .string, .date, .url, .data:
@@ -700,7 +702,8 @@ public final class TOONEncoder {
             return
         }
 
-        write(depth: depth, content: "- [\(array.count)]:", to: &output)
+        let header = formatHeader(length: array.count, delimiter: delimiter.rawValue)
+        write(depth: depth, content: "- \(header)", to: &output)
         for item in array {
             switch item {
             case .null, .bool, .int, .double, .string, .date, .url, .data:
