@@ -399,7 +399,7 @@ private final class Parser {
         // Root array: first line is a valid array header WITHOUT a key (e.g., "[3]:" not "items[3]:")
         // An array header without key starts with "[" immediately
         if firstContent.hasPrefix("["), let header = try? parseArrayHeader(String(firstContent)),
-            strict || header.fields == nil || !hasContentAfterHeaderColon(String(firstContent))
+            strict || header.fields == nil || header.inlineContent.isEmpty
         {
             currentLine = nonEmptyLines[0].offset
             let root = try parseArrayAtCurrentLine(depth: 0, key: nil)
@@ -610,9 +610,7 @@ private final class Parser {
                 if strict { throw error }
             }
 
-            if let header = parsedHeader, header.fields != nil,
-                hasContentAfterHeaderColon(content)
-            {
+            if let header = parsedHeader, header.fields != nil, !header.inlineContent.isEmpty {
                 // Specification 6 forbids content after the colon of a header
                 // that carries a field list: its rows live on the lines below.
                 if strict {
@@ -726,59 +724,8 @@ private final class Parser {
         let fields: [FieldNode]?
         /// The `[N:]` marker of specification 9.5.
         let isKeyed: Bool
-    }
-
-    /// The position of the colon that ends an array header.
-    ///
-    /// The search skips a quoted span, the bracket segment and the field list.
-    /// Each of the three may hold a colon of its own. The keyed marker of
-    /// specification 9.5 sits inside the brackets, and a quoted field name may
-    /// carry any character.
-    private func headerColonIndex(in text: Substring) -> Substring.Index? {
-        var inQuotes = false
-        var escaped = false
-        var brackets = 0
-        var hasUnmatchedBrace = false
-        var index = text.startIndex
-
-        while index < text.endIndex {
-            let char = text[index]
-            if escaped {
-                escaped = false
-            } else if inQuotes, char == "\\" {
-                escaped = true
-            } else if char == "\"" {
-                inQuotes.toggle()
-            } else if !inQuotes {
-                switch char {
-                case "[": brackets += 1
-                case "]": brackets -= 1
-                // A matched field list is skipped whole. After an unmatched
-                // brace the header is malformed whatever follows, so later
-                // braces go unsearched; searching from each would take
-                // quadratic time. The colon after an unmatched brace still
-                // ends the header, which strict mode then rejects as malformed.
-                case "{" where !hasUnmatchedBrace:
-                    if let close = findMatchingBrace(in: text[text.index(after: index)...]) {
-                        index = close
-                    } else {
-                        hasUnmatchedBrace = true
-                    }
-                case ":" where brackets == 0:
-                    return index
-                default: break
-                }
-            }
-            index = text.index(after: index)
-        }
-
-        return nil
-    }
-
-    /// Whether the header line carries content after the colon that ends it.
-    private func hasContentAfterHeaderColon(_ content: String) -> Bool {
-        guard let colonIndex = headerColonIndex(in: content[...]) else { return false }
-        return !content[content.index(after: colonIndex)...].trimmingLeadingSpace().isEmpty
+        /// The text after the colon that ends the header, without the space that follows the colon.
+        let inlineContent: Substring
     }
 
     /// Whether the line is an array-header line, per specification 5.2.
@@ -961,7 +908,8 @@ private final class Parser {
             count: count,
             delimiter: delimiter,
             fields: fields,
-            isKeyed: isKeyed
+            isKeyed: isKeyed,
+            inlineContent: remaining.dropFirst().trimmingLeadingSpace()
         )
     }
 
@@ -1207,7 +1155,7 @@ private final class Parser {
     private func parseArrayContent(header: ArrayHeader, atDepth depth: Int) throws -> Value {
         // Specification 6 forbids content after the colon of a header that
         // carries a field list: the rows live on the lines below it.
-        if strict, header.fields != nil, headerCarriesInlineContent() {
+        if strict, header.fields != nil, !header.inlineContent.isEmpty {
             throw TOONDecodingError.invalidHeader(
                 "Content after the colon of a header that carries a field list, at line "
                     + "\(sourceLine(currentLine - 1))"
@@ -1219,32 +1167,18 @@ private final class Parser {
             return try parseKeyedEntryRows(header: header, atDepth: depth)
         }
 
-        // Check for inline values after header
-        // For example: tags[3]: a,b,c
-
-        // Re-parse to get the full line with potential inline values
-        let headerLine = lines[currentLine - 1]
-        let (_, content) = trimIndentation(headerLine)
-        let contentStr = String(content)
-
-        // Find where the header ends (after the colon)
-        if let colonIndex = headerColonIndex(in: contentStr[...]) {
-            let afterColon = contentStr[contentStr.index(after: colonIndex)...]
-            let inlineValues = afterColon.trimmingLeadingSpace()
-
-            if !inlineValues.isEmpty {
-                // Inline primitive array
-                let values = try parseDelimitedValues(String(inlineValues), delimiter: header.delimiter)
-                try checkArrayLength(values.count)
-                if strict, values.count != header.count {
-                    throw TOONDecodingError.countMismatch(
-                        expected: header.count,
-                        actual: values.count,
-                        line: lastReadSourceLine
-                    )
-                }
-                return .array(values)
+        // Inline primitive array, for example `tags[3]: a,b,c`
+        if !header.inlineContent.isEmpty {
+            let values = try parseDelimitedValues(String(header.inlineContent), delimiter: header.delimiter)
+            try checkArrayLength(values.count)
+            if strict, values.count != header.count {
+                throw TOONDecodingError.countMismatch(
+                    expected: header.count,
+                    actual: values.count,
+                    line: lastReadSourceLine
+                )
             }
+            return .array(values)
         }
 
         // No inline values - parse expanded content
@@ -1266,16 +1200,6 @@ private final class Parser {
         // The readers above already apply the length rule of specification
         // 14.1, which is a strict-mode check and never truncates the scope.
         return .array(items)
-    }
-
-    /// Whether the header line that was just consumed carries content after
-    /// its final colon.
-    private func headerCarriesInlineContent() -> Bool {
-        guard currentLine > 0, currentLine - 1 < lines.count else { return false }
-        let (_, content) = trimIndentation(lines[currentLine - 1])
-        guard let colonIndex = headerColonIndex(in: content) else { return false }
-        let afterColon = content[content.index(after: colonIndex)...]
-        return !afterColon.trimmingLeadingSpace().isEmpty
     }
 
     /// Reads the entry rows of a keyed tabular scope (specification 9.5).
@@ -1573,7 +1497,7 @@ private final class Parser {
             // reads as a key-value line outside strict mode, as it does in
             // parseKeyValuePair.
             if let header = try parseHeaderIfPresent(content), let headerKey = header.key,
-                strict || header.fields == nil || !hasContentAfterHeaderColon(content)
+                strict || header.fields == nil || header.inlineContent.isEmpty
             {
                 objectValues[headerKey] = try parseArrayContent(header: header, atDepth: depth + 1)
             } else {
