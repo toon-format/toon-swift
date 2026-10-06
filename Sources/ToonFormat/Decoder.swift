@@ -542,7 +542,13 @@ private final class Parser {
 
     // MARK: - Object Parsing
 
-    private func parseObject(atDepth depth: Int) throws -> Value {
+    /// Reads the fields of an object at `depth`.
+    ///
+    /// `scopeDepth` is the depth where the scope of the object starts. It is
+    /// shallower than `depth` only when a jumped first line set the depth of
+    /// the fields outside strict mode. A line between the two depths belongs
+    /// to the scope but to no field, so it counts as over-indented.
+    private func parseObject(atDepth depth: Int, scopeDepth: Int? = nil) throws -> Value {
         // Check depth limit
         if depth > limits.maxDepth {
             throw TOONDecodingError.depthLimitExceeded(depth: depth, limit: limits.maxDepth)
@@ -560,7 +566,7 @@ private final class Parser {
             let (lineDepth, content) = trimIndentation(line)
 
             // If we've decreased in depth, we're done with this object
-            if lineDepth < depth {
+            if lineDepth < scopeDepth ?? depth {
                 break
             }
 
@@ -702,6 +708,11 @@ private final class Parser {
         }
 
         if lineDepth != depth {
+            // Outside strict mode the first line sets the depth of the fields,
+            // even when it jumps a level.
+            guard strict else {
+                return try parseObject(atDepth: lineDepth, scopeDepth: depth)
+            }
             throw TOONDecodingError.invalidIndentation(
                 line: sourceLine(currentLine),
                 message: "Expected indentation depth \(depth), got \(lineDepth)"
@@ -1289,23 +1300,29 @@ private final class Parser {
         }
 
         var values: ObjectStorage = [:]
-        let expectedDepth = depth + 1
+        var expectedDepth = depth + 1
         let width = fields.leafCount
 
         // Specification 14.1 states that a declared length never terminates or
         // truncates a scope. The loop therefore reads to the end of the scope,
         // then checks the length.
         while true {
-            try skipBlankLines(insideScopeAtDepth: expectedDepth, hasElement: !values.isEmpty)
+            try skipBlankLines(insideScopeAtDepth: depth + 1, hasElement: !values.isEmpty)
 
             guard let line = peekLine(), !line.isEmpty else { break }
 
             let (lineDepth, content) = trimIndentation(line)
-            if lineDepth < expectedDepth {
+            if lineDepth <= depth {
                 break
             }
 
-            if lineDepth > expectedDepth {
+            // Outside strict mode the first line sets the depth of the scope,
+            // even when it jumps a level.
+            if !strict, values.isEmpty {
+                expectedDepth = lineDepth
+            }
+
+            if lineDepth != expectedDepth {
                 try skipOverIndentedLine(expectedDepth: expectedDepth)
                 continue
             }
@@ -1391,23 +1408,29 @@ private final class Parser {
         atDepth depth: Int
     ) throws -> [Value] {
         var rows: [Value] = []
-        let expectedDepth = depth + 1
+        var expectedDepth = depth + 1
 
         // Specification 14.1 states that a declared length never terminates or
         // truncates a scope. The scope ends where the depth decreases, and the
         // length is a check afterwards.
         while true {
-            try skipBlankLines(insideScopeAtDepth: expectedDepth, hasElement: !rows.isEmpty)
+            try skipBlankLines(insideScopeAtDepth: depth + 1, hasElement: !rows.isEmpty)
 
             guard let line = peekLine(), !line.isEmpty else { break }
 
             let (lineDepth, content) = trimIndentation(line)
 
-            if lineDepth < expectedDepth {
+            if lineDepth <= depth {
                 break
             }
 
-            if lineDepth > expectedDepth {
+            // Outside strict mode the first line sets the depth of the scope,
+            // even when it jumps a level.
+            if !strict, rows.isEmpty {
+                expectedDepth = lineDepth
+            }
+
+            if lineDepth != expectedDepth {
                 try skipOverIndentedLine(expectedDepth: expectedDepth)
                 continue
             }
@@ -1456,23 +1479,29 @@ private final class Parser {
 
     private func parseListItems(count: Int, delimiter: String, atDepth depth: Int) throws -> [Value] {
         var items: [Value] = []
-        let expectedDepth = depth + 1
+        var expectedDepth = depth + 1
 
         // Specification 14.1 states that a declared length never terminates or
         // truncates a scope. The loop therefore reads to the end of the scope,
         // then checks the length.
         while true {
-            try skipBlankLines(insideScopeAtDepth: expectedDepth, hasElement: !items.isEmpty)
+            try skipBlankLines(insideScopeAtDepth: depth + 1, hasElement: !items.isEmpty)
 
             guard let line = peekLine(), !line.isEmpty else { break }
 
             let (lineDepth, content) = trimIndentation(line)
 
-            if lineDepth < expectedDepth {
+            if lineDepth <= depth {
                 break
             }
 
-            if lineDepth > expectedDepth {
+            // Outside strict mode the first line sets the depth of the scope,
+            // even when it jumps a level.
+            if !strict, items.isEmpty {
+                expectedDepth = lineDepth
+            }
+
+            if lineDepth != expectedDepth {
                 try skipOverIndentedLine(expectedDepth: expectedDepth)
                 continue
             }
