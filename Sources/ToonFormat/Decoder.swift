@@ -347,12 +347,12 @@ private final class Parser {
     ///
     /// Specification 14.2 makes that an error in strict mode. A decoder
     /// outside strict mode may ignore the line instead, and the reference
-    /// implementation does.
+    /// implementation does. A line without an unquoted colon is a scalar
+    /// line, which no mode accepts there.
     private func rejectTrailingContentAfterRoot() throws {
-        guard strict else { return }
-
         while currentLine < lines.count {
-            if !lines[currentLine].isEmpty {
+            let content = trimIndentation(lines[currentLine]).content
+            if !content.isEmpty, strict || findUnquotedColon(in: content) == nil {
                 throw TOONDecodingError.invalidFormat(
                     "Trailing content after the root value, at line \(sourceLine(currentLine))"
                 )
