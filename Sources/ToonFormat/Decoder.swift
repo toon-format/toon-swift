@@ -1545,18 +1545,18 @@ private final class Parser {
 
         // Check for array header WITHOUT key: - [N]: a,b,c
         // This returns a bare array, not an object with an array field
-        if content.hasPrefix("["), let header = try parseHeaderIfPresent(content),
-            strict || header.fields == nil || !hasContentAfterHeaderColon(content)
-        {
-            // Specification 6 allows a keyless header as a list item only
-            // without a field list.
-            if header.fields != nil, strict {
+        // Specification 6 allows a keyless header as a list item only without
+        // a field list. Outside strict mode the line reads as a key-value line.
+        if content.hasPrefix("["), let header = try parseHeaderIfPresent(content) {
+            if header.fields == nil {
+                return try parseArrayContent(header: header, atDepth: depth)
+            }
+            if strict {
                 throw TOONDecodingError.invalidHeader(
                     "A keyless header that carries a field list is not allowed as a list item: "
                         + content
                 )
             }
-            return try parseArrayContent(header: header, atDepth: depth)
         }
 
         // Check for key: value on same line (may be key[N]: values for array)
