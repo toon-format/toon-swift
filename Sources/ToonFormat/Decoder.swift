@@ -1199,19 +1199,15 @@ private final class Parser {
     /// Specification 9.3 maps the cells to the leaves in depth-first order.
     /// Specification 14.1 gives two rules for non-strict mode. A leaf with no
     /// remaining cell is absent from the object, and is not null. A surplus
-    /// cell contributes nothing.
+    /// cell contributes nothing. A nested group still materializes when no
+    /// cell remains for it, as an empty object.
     private func materializeRow(fields: [FieldNode], cells: [Value], cursor: inout Int) -> Value {
         var values: ObjectStorage = [:]
 
         for field in fields {
             let value: Value
             if let children = field.children {
-                let before = cursor
-                let nested = materializeRow(fields: children, cells: cells, cursor: &cursor)
-                if cursor == before, case let .object(inner) = nested, inner.isEmpty {
-                    continue
-                }
-                value = nested
+                value = materializeRow(fields: children, cells: cells, cursor: &cursor)
             } else {
                 guard cursor < cells.count else { continue }
                 value = cells[cursor]
