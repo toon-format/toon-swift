@@ -68,28 +68,28 @@ struct FixtureTests {
     /// file to another keeps the total. A whole group can shrink while another
     /// group grows. The counts are per file for that reason.
     private static let expectedCounts: [String: Int] = [
-        "decode/arrays-nested.json": 25,
-        "decode/arrays-primitive.json": 19,
-        "decode/arrays-tabular.json": 18,
-        "decode/blank-lines.json": 21,
-        "decode/comments.json": 19,
-        "decode/delimiters.json": 29,
-        "decode/indentation-errors.json": 19,
-        "decode/numbers.json": 28,
-        "decode/objects-keyed.json": 19,
-        "decode/objects.json": 55,
-        "decode/primitives.json": 28,
-        "decode/root-form.json": 8,
-        "decode/validation-errors.json": 56,
-        "decode/whitespace.json": 15,
-        "encode/arrays-nested.json": 15,
-        "encode/arrays-objects.json": 18,
-        "encode/arrays-primitive.json": 13,
+        "decode/arrays-nested.json": 26,
+        "decode/arrays-primitive.json": 17,
+        "decode/arrays-tabular.json": 24,
+        "decode/blank-lines.json": 23,
+        "decode/comments.json": 15,
+        "decode/delimiters.json": 25,
+        "decode/indentation-errors.json": 26,
+        "decode/numbers.json": 15,
+        "decode/objects-keyed.json": 17,
+        "decode/objects.json": 56,
+        "decode/primitives.json": 20,
+        "decode/root-form.json": 11,
+        "decode/validation-errors.json": 83,
+        "decode/whitespace.json": 16,
+        "encode/arrays-nested.json": 14,
+        "encode/arrays-objects.json": 12,
+        "encode/arrays-primitive.json": 11,
         "encode/arrays-tabular.json": 16,
-        "encode/delimiters.json": 22,
-        "encode/objects-keyed.json": 13,
-        "encode/objects.json": 34,
-        "encode/primitives.json": 44,
+        "encode/delimiters.json": 17,
+        "encode/objects-keyed.json": 14,
+        "encode/objects.json": 31,
+        "encode/primitives.json": 40,
         "encode/whitespace.json": 4,
     ]
 
@@ -106,8 +106,8 @@ struct FixtureTests {
         }
         #expect(counts == Self.expectedCounts)
 
-        #expect(Fixtures.encode.count == 179)
-        #expect(Fixtures.decode.count == 359)
+        #expect(Fixtures.encode.count == 159)
+        #expect(Fixtures.decode.count == 374)
     }
 
     /// Guards against a corpus taken from another release.
