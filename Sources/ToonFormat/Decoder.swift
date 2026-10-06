@@ -600,7 +600,7 @@ private final class Parser {
         // Specification 5.2 classifies the line before anything reads it. A
         // line whose first unquoted colon precedes any unquoted bracket is a
         // key-value line, never a header.
-        if isArrayHeaderLine(content), headerColonIndex(in: content[...]) != nil {
+        if isArrayHeaderLine(content) {
             var parsedHeader: ArrayHeader?
             do {
                 parsedHeader = try parseArrayHeader(content)
@@ -782,10 +782,11 @@ private final class Parser {
     ///
     /// The line is a header when an unquoted bracket precedes the first
     /// unquoted colon. A bracket inside a quoted key, or after the colon, is
-    /// content.
+    /// content. A line without an unquoted colon is never a header.
     private func isArrayHeaderLine(_ content: String) -> Bool {
         var inQuotes = false
         var escaped = false
+        var sawBracket = false
 
         for char in content {
             if escaped {
@@ -801,8 +802,8 @@ private final class Parser {
                 continue
             }
             guard !inQuotes else { continue }
-            if char == "[" { return true }
-            if char == ":" { return false }
+            if char == "[" { sawBracket = true }
+            if char == ":" { return sawBracket }
         }
 
         return false
@@ -816,12 +817,7 @@ private final class Parser {
     /// Specification 6 lets a decoder outside strict mode fall back to a
     /// key-value pair, so only strict mode reports the defect.
     private func parseHeaderIfPresent(_ content: String) throws -> ArrayHeader? {
-        // A header always ends with a colon. A line such as `[1,2,3]` carries
-        // no colon, so specification 5.2 leaves it a scalar, not a defective
-        // header.
-        guard isArrayHeaderLine(content), headerColonIndex(in: content[...]) != nil else {
-            return nil
-        }
+        guard isArrayHeaderLine(content) else { return nil }
         do {
             return try parseArrayHeader(content)
         } catch {
