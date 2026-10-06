@@ -372,17 +372,19 @@ private final class Parser {
 
         // Detect root form
         let firstNonEmptyLine = nonEmptyLines[0].element
-        let firstContent = trimIndentation(firstNonEmptyLine).content
+        // Every root form below opens at depth 0. An indented first line falls
+        // through to the object reader, which treats it as over-indented.
+        let (firstDepth, firstContent) = trimIndentation(firstNonEmptyLine)
 
         // Specification 4 gives the literal token `[]` at the root the meaning
         // of an empty array.
-        if firstContent == "[]", nonEmptyLines.count == 1 {
+        if firstDepth == 0, firstContent == "[]", nonEmptyLines.count == 1 {
             return .array([])
         }
 
         // Root array: first line is a valid array header WITHOUT a key (e.g., "[3]:" not "items[3]:")
         // An array header without key starts with "[" immediately
-        if firstContent.hasPrefix("["), let _ = try? parseArrayHeader(String(firstContent)) {
+        if firstDepth == 0, firstContent.hasPrefix("["), let _ = try? parseArrayHeader(String(firstContent)) {
             currentLine = nonEmptyLines[0].offset
             let root = try parseArrayAtCurrentLine(depth: 0, key: nil)
             try rejectTrailingContentAfterRoot()
@@ -391,7 +393,7 @@ private final class Parser {
 
         // Single primitive: exactly one non-empty line that's not an object key-value pair
         // A key-value pair has an unquoted colon, even one inside brackets
-        if nonEmptyLines.count == 1 {
+        if nonEmptyLines.count == 1, firstDepth == 0 {
             let contentStr = String(firstContent)
             if findUnquotedColon(in: firstContent) == nil {
                 return try parsePrimitiveValue(contentStr)
