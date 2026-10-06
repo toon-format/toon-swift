@@ -1269,7 +1269,7 @@ private final class Parser {
             if !inlineValues.isEmpty {
                 // Inline primitive array
                 let values = try parseDelimitedValues(String(inlineValues), delimiter: header.delimiter)
-                if values.count != header.count {
+                if strict, values.count != header.count {
                     throw TOONDecodingError.countMismatch(
                         expected: header.count,
                         actual: values.count,
