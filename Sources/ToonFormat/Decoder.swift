@@ -1124,6 +1124,12 @@ private final class Parser {
                     current = ""
                     continue
                 }
+
+                if char == "," || char == "|" || char == "\t", String(char) != delimiter {
+                    throw TOONDecodingError.invalidHeader(
+                        "The field list uses a delimiter other than its bracket segment: \(fieldsStr)"
+                    )
+                }
             }
 
             current.append(char)
