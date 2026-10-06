@@ -245,7 +245,12 @@ public final class TOONEncoder {
         case .null, .bool, .int, .double, .string, .date, .url, .data:
             // Special case for root-level primitives
             if depth == 0 {
-                if let encoded = encodePrimitive(value, delimiter: delimiter.rawValue, inObject: false) {
+                // A decoder strips a U+FEFF at the start of the document as a
+                // byte-order mark, so only a root string quotes a leading one
+                // (specification 7.2).
+                if case .string(let stringValue) = value, stringValue.unicodeScalars.first == "\u{FEFF}" {
+                    write(depth: depth, content: "\"\(stringValue.escaped)\"", to: &output)
+                } else if let encoded = encodePrimitive(value, delimiter: delimiter.rawValue, inObject: false) {
                     write(depth: depth, content: encoded, to: &output)
                 }
             }
@@ -1910,14 +1915,6 @@ private extension String {
         // A hyphen at position 0 reads as the list marker, and a number sign
         // at position 0 reads as a comment line (section 5.1).
         if hasPrefix("-") || hasPrefix("#") {
-            return false
-        }
-
-        // Stricter than the specification, which obliges only a decoder to
-        // strip a leading byte-order mark (section 12). Without this, a root
-        // string that starts with U+FEFF loses its first character on a round
-        // trip. Reported upstream as toon-format/toon issue 339.
-        if unicodeScalars.first == "\u{FEFF}" {
             return false
         }
 
