@@ -610,15 +610,17 @@ struct DecoderTests {
         let lenient = TOONDecoder()
         lenient.strict = false
 
-        let value = try lenient.decode(
-            TOONValue.self,
-            from: Data("a[1]:\n  - nums[3x]: 1,2,3".utf8)
-        )
-
-        let expected = TOONValue.object(
-            TOONObject([("a", .array([.object(TOONObject([("nums[3x]", .string("1,2,3"))]))]))])
-        )
-        #expect(value == expected)
+        let cases: [(source: String, key: String, value: TOONValue)] = [
+            ("a[1]:\n  - nums[3x]: 1,2,3", "nums[3x]", .string("1,2,3")),
+            ("a[1]:\n  - k[1]{a}: 1", "k[1]{a}", .int(1)),
+        ]
+        for (source, key, fieldValue) in cases {
+            let value = try lenient.decode(TOONValue.self, from: Data(source.utf8))
+            let expected = TOONValue.object(
+                TOONObject([("a", .array([.object(TOONObject([(key, fieldValue)]))]))])
+            )
+            #expect(value == expected)
+        }
     }
 
     /// A list-item line with a bracket but no colon stays a scalar.
