@@ -771,7 +771,7 @@ struct EncoderTests {
 
     @available(*, deprecated)
     @Test func versionDeclaration() async throws {
-        #expect(toonSpecVersion == "4.2")
+        #expect(toonSpecVersion == "4.3")
     }
 
     @available(*, deprecated)

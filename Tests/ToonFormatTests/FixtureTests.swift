@@ -74,19 +74,19 @@ struct FixtureTests {
         "decode/blank-lines.json": 23,
         "decode/comments.json": 15,
         "decode/delimiters.json": 25,
-        "decode/indentation-errors.json": 26,
+        "decode/indentation-errors.json": 27,
         "decode/numbers.json": 15,
         "decode/objects-keyed.json": 17,
         "decode/objects.json": 56,
         "decode/primitives.json": 20,
-        "decode/root-form.json": 11,
-        "decode/validation-errors.json": 83,
+        "decode/root-form.json": 13,
+        "decode/validation-errors.json": 91,
         "decode/whitespace.json": 16,
         "encode/arrays-nested.json": 14,
         "encode/arrays-objects.json": 12,
         "encode/arrays-primitive.json": 11,
         "encode/arrays-tabular.json": 16,
-        "encode/delimiters.json": 17,
+        "encode/delimiters.json": 18,
         "encode/objects-keyed.json": 14,
         "encode/objects.json": 31,
         "encode/primitives.json": 40,
@@ -106,8 +106,8 @@ struct FixtureTests {
         }
         #expect(counts == Self.expectedCounts)
 
-        #expect(Fixtures.encode.count == 159)
-        #expect(Fixtures.decode.count == 374)
+        #expect(Fixtures.encode.count == 160)
+        #expect(Fixtures.decode.count == 385)
     }
 
     /// Guards against a corpus taken from another release.
