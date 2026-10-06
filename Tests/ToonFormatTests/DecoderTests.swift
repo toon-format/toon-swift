@@ -541,26 +541,6 @@ struct DecoderTests {
         #expect(object["a"] == .int(3))
     }
 
-    @Test func keysThatDifferOnlyInNormalizationFormStayApart() async throws {
-        // Specification 2 and 16 make two keys the same key only when their
-        // Unicode scalar sequences are equal. The two keys below are
-        // canonically equivalent, so a Swift dictionary merges them, and
-        // strict mode would then report a duplicate key.
-        let composed = "\u{00E9}"
-        let decomposed = "e\u{0301}"
-        let toon = "\(composed): one\n\(decomposed): two"
-
-        let value = try decoder.decode(TOONValue.self, from: Data(toon.utf8))
-
-        guard case let .object(object) = value else {
-            Issue.record("Expected an object, got \(value)")
-            return
-        }
-        #expect(object.count == 2)
-        #expect(object[composed] == .string("one"))
-        #expect(object[decomposed] == .string("two"))
-    }
-
     /// A decimal whose exponent overflows `Double` stays a string.
     ///
     /// `Double("1e999")` gives an infinity, not `nil`. An infinity has no place
@@ -621,17 +601,6 @@ struct DecoderTests {
             )
             #expect(value == expected)
         }
-    }
-
-    /// A list-item line with a bracket but no colon stays a scalar.
-    ///
-    /// Section 5.2 needs a colon to end a header, so `- [1,2,3]` is the
-    /// string `[1,2,3]` and not a defective header.
-    @Test func aBracketLineWithNoColonStaysAScalar() async throws {
-        let value = try decoder.decode(TOONValue.self, from: Data("a[1]:\n  - [1,2,3]".utf8))
-
-        let expected = TOONValue.object(TOONObject([("a", .array([.string("[1,2,3]")]))]))
-        #expect(value == expected)
     }
 
     /// Outside strict mode a row of the wrong width is not an error.

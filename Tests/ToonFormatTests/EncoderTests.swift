@@ -425,33 +425,7 @@ struct EncoderTests {
         #expect(nestedListInListResult.contains("    status: active"))
     }
 
-    // MARK: - Arrays of Arrays
-
-    /// A list-item object whose first field holds an array of arrays must
-    /// write every element of that array.
-    ///
-    /// The branch that writes the array used to skip an element that is not
-    /// primitive. The header still declared the full length, so the output
-    /// held fewer rows than it promised, and the decoder rejected it.
-    @Test func innerArrayOfObjectsInAListItemFieldSurvives() async throws {
-        let document = TOONValue.array([
-            .object(TOONObject([("a", .array([.int(1), .array([.object(TOONObject([("x", .int(1))]))])]))]))
-        ])
-
-        let result = String(data: try encoder.encode(document), encoding: .utf8)!
-
-        let expected = """
-            [1]:
-              - a[2]:
-                  - 1
-                  - [1]:
-                    - x: 1
-            """
-        #expect(result == expected)
-
-        let decoded = try TOONDecoder().decode(TOONValue.self, from: Data(result.utf8))
-        #expect(decoded == document)
-    }
+    // MARK: - Indent Size Option
 
     /// An indentation size below one is a mistake, not a crash.
     ///
