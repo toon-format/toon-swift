@@ -389,7 +389,9 @@ private final class Parser {
 
         // Root array: first line is a valid array header WITHOUT a key (e.g., "[3]:" not "items[3]:")
         // An array header without key starts with "[" immediately
-        if firstDepth == 0, firstContent.hasPrefix("["), let _ = try? parseArrayHeader(String(firstContent)) {
+        if firstDepth == 0, firstContent.hasPrefix("["), let header = try? parseArrayHeader(String(firstContent)),
+            strict || header.fields == nil || !hasContentAfterHeaderColon(String(firstContent))
+        {
             currentLine = nonEmptyLines[0].offset
             let root = try parseArrayAtCurrentLine(depth: 0, key: nil)
             try rejectTrailingContentAfterRoot()
@@ -1533,7 +1535,9 @@ private final class Parser {
 
         // Check for array header WITHOUT key: - [N]: a,b,c
         // This returns a bare array, not an object with an array field
-        if content.hasPrefix("["), let header = try parseHeaderIfPresent(content) {
+        if content.hasPrefix("["), let header = try parseHeaderIfPresent(content),
+            strict || header.fields == nil || !hasContentAfterHeaderColon(content)
+        {
             // Specification 6 allows a keyless header as a list item only
             // without a field list.
             if header.fields != nil, strict {
