@@ -779,7 +779,7 @@ private final class Parser {
                 // Specification 6 forbids whitespace between a key and its
                 // bracket segment; the token trimming of section 12 does not
                 // reach here.
-                if keyPart.last == " " || keyPart.last == "\t" {
+                if keyPart.last?.isWhitespace == true {
                     throw TOONDecodingError.invalidHeader(
                         "Whitespace between the key and its bracket segment: \(content)"
                     )
@@ -1049,7 +1049,7 @@ private final class Parser {
         }
         // Token trimming stops short of a nested group, so whitespace before
         // its brace is a defect, not padding.
-        if last == " " || last == "\t" {
+        if last.isWhitespace {
             throw TOONDecodingError.invalidHeader(
                 "Whitespace between a field name and its nested field group: \(field)"
             )
