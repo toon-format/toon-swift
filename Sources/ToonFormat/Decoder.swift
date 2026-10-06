@@ -390,10 +390,10 @@ private final class Parser {
         }
 
         // Single primitive: exactly one non-empty line that's not an object key-value pair
-        // A key-value pair has a colon NOT inside quotes and NOT part of an array header
+        // A key-value pair has an unquoted colon, even one inside brackets
         if nonEmptyLines.count == 1 {
             let contentStr = String(firstContent)
-            if !isKeyValuePair(contentStr) {
+            if findUnquotedColon(in: firstContent) == nil {
                 return try parsePrimitiveValue(contentStr)
             }
         }
@@ -401,42 +401,6 @@ private final class Parser {
         // Default: object
         currentLine = 0
         return try parseObject(atDepth: 0)
-    }
-
-    /// Checks if a line represents a key: value pair (as opposed to a single primitive value)
-    private func isKeyValuePair(_ content: String) -> Bool {
-        var inQuotes = false
-        var escaped = false
-        var bracketDepth = 0
-
-        for char in content {
-            if escaped {
-                escaped = false
-                continue
-            }
-
-            if char == "\\" {
-                escaped = true
-                continue
-            }
-
-            if char == "\"" {
-                inQuotes.toggle()
-                continue
-            }
-
-            if !inQuotes {
-                if char == "[" {
-                    bracketDepth += 1
-                } else if char == "]" {
-                    bracketDepth -= 1
-                } else if char == ":" && bracketDepth == 0 {
-                    return true
-                }
-            }
-        }
-
-        return false
     }
 
     // MARK: - Indentation Handling
@@ -623,7 +587,7 @@ private final class Parser {
         // Specification 5.2 classifies the line before anything reads it. A
         // line whose first unquoted colon precedes any unquoted bracket is a
         // key-value line, never a header.
-        if isArrayHeaderLine(content) {
+        if isArrayHeaderLine(content), headerColonIndex(in: content[...]) != nil {
             var parsedHeader: ArrayHeader?
             do {
                 parsedHeader = try parseArrayHeader(content)
@@ -660,7 +624,7 @@ private final class Parser {
         }
 
         // Parse as key: value
-        guard let colonIndex = findKeyValueSeparator(in: content) else {
+        guard let colonIndex = findUnquotedColon(in: content[...]) else {
             throw TOONDecodingError.invalidFormat("Expected key: value at line \(lastReadSourceLine), got: \(content)")
         }
 
@@ -679,43 +643,6 @@ private final class Parser {
             let value = try parseValueInValuePosition(valuePart)
             return (key, value)
         }
-    }
-
-    private func findKeyValueSeparator(in content: String) -> String.Index? {
-        // Find the colon that separates key from value
-        // Handle quoted keys: "key:with:colons": value
-        var inQuotes = false
-        var escaped = false
-        var bracketDepth = 0
-
-        for (i, char) in content.enumerated() {
-            if escaped {
-                escaped = false
-                continue
-            }
-
-            if char == "\\" {
-                escaped = true
-                continue
-            }
-
-            if char == "\"" {
-                inQuotes.toggle()
-                continue
-            }
-
-            if !inQuotes {
-                if char == "[" {
-                    bracketDepth += 1
-                } else if char == "]" {
-                    bracketDepth -= 1
-                } else if char == ":", bracketDepth == 0 {
-                    return content.index(content.startIndex, offsetBy: i)
-                }
-            }
-        }
-
-        return nil
     }
 
     /// Reads a key token: the key of a key-value line, an entry key, or a
@@ -790,7 +717,7 @@ private final class Parser {
         var inQuotes = false
         var escaped = false
         var brackets = 0
-        var braces = 0
+        var hasUnmatchedBrace = false
         var index = text.startIndex
 
         while index < text.endIndex {
@@ -805,9 +732,18 @@ private final class Parser {
                 switch char {
                 case "[": brackets += 1
                 case "]": brackets -= 1
-                case "{": braces += 1
-                case "}": braces -= 1
-                case ":" where brackets == 0 && braces == 0:
+                // A matched field list is skipped whole. After an unmatched
+                // brace the header is malformed whatever follows, so later
+                // braces go unsearched; searching from each would take
+                // quadratic time. The colon after an unmatched brace still
+                // ends the header, which strict mode then rejects as malformed.
+                case "{" where !hasUnmatchedBrace:
+                    if let close = findMatchingBrace(in: text[text.index(after: index)...]) {
+                        index = close
+                    } else {
+                        hasUnmatchedBrace = true
+                    }
+                case ":" where brackets == 0:
                     return index
                 default: break
                 }
@@ -1560,40 +1496,27 @@ private final class Parser {
         }
 
         // Check for key: value on same line (may be key[N]: values for array)
-        if let colonIndex = findKeyValueSeparator(in: content) {
-            let keyPart = String(content[..<colonIndex])
-            let key = try parseKey(keyPart)
-
-            let afterColon = content.index(after: colonIndex)
-            let valuePart = String(content[afterColon...]).trimmingLeadingSpace()
-
+        if let colonIndex = findUnquotedColon(in: content[...]) {
             var objectValues: ObjectStorage = [:]
 
-            if valuePart.isEmpty {
-                // A header on the hyphen line describes the first field of the
-                // list-item object. That field sits one level below the hyphen
-                // line, so its rows sit two levels below it (specification 10).
-                if let header = try parseHeaderIfPresent(content),
-                    let headerKey = header.key
-                {
-                    objectValues[headerKey] = try parseArrayContent(
-                        header: header,
-                        atDepth: depth + 1
-                    )
-                } else {
+            // A header on the hyphen line describes the first field of the
+            // list-item object. That field sits one level below the hyphen
+            // line, so its rows sit two levels below it (specification 10).
+            // Content after the colon of a header that carries a field list
+            // reads as a key-value line outside strict mode, as it does in
+            // parseKeyValuePair.
+            if let header = try parseHeaderIfPresent(content), let headerKey = header.key,
+                strict || header.fields == nil || !hasContentAfterHeaderColon(content)
+            {
+                objectValues[headerKey] = try parseArrayContent(header: header, atDepth: depth + 1)
+            } else {
+                let key = try parseKey(String(content[..<colonIndex]))
+                let valuePart = String(content[content.index(after: colonIndex)...]).trimmingLeadingSpace()
+
+                if valuePart.isEmpty {
                     // The first field sits one level below the hyphen line, so
                     // its own content sits two levels below it (section 10).
-                    let nestedValue = try parseNestedValue(atDepth: depth + 2)
-                    objectValues[key] = nestedValue
-                }
-            } else {
-                // Check if the key is an array header (like nums[3])
-                // The full string would be "nums[3]: 1,2,3"
-                if let header = try parseHeaderIfPresent(content) {
-                    // Parse as array with the key
-                    let array = try parseArrayContent(header: header, atDepth: depth)
-                    let arrayKey = header.key ?? key
-                    objectValues[arrayKey] = array
+                    objectValues[key] = try parseNestedValue(atDepth: depth + 2)
                 } else {
                     // Inline primitive value
                     objectValues[key] = try parseValueInValuePosition(valuePart)
