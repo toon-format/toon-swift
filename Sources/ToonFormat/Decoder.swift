@@ -206,7 +206,12 @@ public final class TOONDecoder {
             throw TOONDecodingError.inputTooLarge(size: data.count, limit: limits.maxInputSize)
         }
 
-        guard let text = String(data: data, encoding: .utf8) else {
+        // String(data:encoding:) drops a leading byte-order mark, and the
+        // pre-pass drops one more, so a second mark would vanish from the
+        // content. String(decoding:as:) keeps every scalar but repairs
+        // ill-formed input, which a comparison with the bytes detects.
+        let text = String(decoding: data, as: UTF8.self)
+        guard text.utf8.elementsEqual(data) else {
             throw TOONDecodingError.invalidFormat("Data is not valid UTF-8")
         }
 
