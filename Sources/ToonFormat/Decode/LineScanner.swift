@@ -33,6 +33,8 @@ enum LineScanner {
     /// 3. Strip the trailing spaces (U+0020) of a line. A line whose content
     ///    is `-` followed only by spaces is therefore the bare marker of an
     ///    empty-object list item. It is not a list item with an empty token.
+    ///    Outside strict mode a tab is indentation, so a line of tabs and
+    ///    spaces is blank.
     /// 4. Remove the comment lines (§ 5.1). A comment line is a line whose
     ///    first character after zero or more leading spaces is `#`. Only
     ///    spaces may precede the `#`, so a line indented with a tab is
@@ -71,7 +73,10 @@ enum LineScanner {
                 end -= 1
             }
 
-            let content = scalars[lineStart ..< end]
+            var content = scalars[lineStart ..< end]
+            if !strict, content.allSatisfy({ $0 == " " || $0 == "\t" }) {
+                content = []
+            }
             if !isCommentLine(content) {
                 // Section 5.1 exempts a comment line from these checks, and a
                 // blank line carries no indentation to check.
