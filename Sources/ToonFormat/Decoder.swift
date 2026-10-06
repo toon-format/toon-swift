@@ -1281,10 +1281,6 @@ private final class Parser {
         }
 
         // No inline values - parse expanded content
-        if header.count == 0 {
-            return .array([])
-        }
-
         var items: [Value] = []
 
         if let fields = header.fields {
