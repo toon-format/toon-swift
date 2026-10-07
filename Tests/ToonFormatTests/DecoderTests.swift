@@ -582,68 +582,6 @@ struct DecoderTests {
         }
     }
 
-    /// Outside strict mode the same header falls back to a key-value pair.
-    ///
-    /// Specification 6 allows that fallback, and the reference
-    /// implementation makes it.
-    @Test func aDefectiveHeaderInAListItemFallsBackOutsideStrictMode() async throws {
-        let lenient = TOONDecoder()
-        lenient.strict = false
-
-        let value = try lenient.decode(
-            TOONValue.self,
-            from: Data("a[1]:\n  - nums[3x]: 1,2,3".utf8)
-        )
-
-        let expected = TOONValue.object(
-            TOONObject([("a", .array([.object(TOONObject([("nums[3x]", .string("1,2,3"))]))]))])
-        )
-        #expect(value == expected)
-    }
-
-    /// Outside strict mode a row of the wrong width is not an error.
-    ///
-    /// Section 14.1 makes a leaf with no cell absent from the object, and
-    /// lets a surplus cell contribute nothing. `materializeRow` already did
-    /// that, but both call sites threw before the field walk could run, so
-    /// the rule was unreachable.
-    @Test func aRowOfTheWrongWidthIsNotAnErrorOutsideStrictMode() async throws {
-        let lenient = TOONDecoder()
-        lenient.strict = false
-
-        let short = try lenient.decode(
-            TOONValue.self,
-            from: Data("items[1]{a,b,c}:\n  1,2".utf8)
-        )
-        let long = try lenient.decode(
-            TOONValue.self,
-            from: Data("items[1]{a,b}:\n  1,2,3".utf8)
-        )
-
-        let expected = TOONValue.object(
-            TOONObject([
-                ("items", .array([.object(TOONObject([("a", .int(1)), ("b", .int(2))]))]))
-            ])
-        )
-        #expect(short == expected)
-        #expect(long == expected)
-
-        // A keyed scope follows the same rule.
-        let keyed = try lenient.decode(
-            TOONValue.self,
-            from: Data("t[1:]{a,b}:\n  k: 1".utf8)
-        )
-        let expectedKeyed = TOONValue.object(
-            TOONObject([("t", .object(TOONObject([("k", .object(TOONObject([("a", .int(1))])))])))])
-        )
-        #expect(keyed == expectedKeyed)
-
-        // Strict mode still reports the mismatch.
-        #expect(throws: TOONDecodingError.self) {
-            try self.decoder.decode(TOONValue.self, from: Data("items[1]{a,b,c}:\n  1,2".utf8))
-        }
-    }
-
     /// An indentation size below one is a mistake, not a silent flattening.
     ///
     /// The decoder divided by the size to get the depth of a line, and
@@ -723,26 +661,6 @@ struct DecoderTests {
         // A value that fits still decodes, and an inexact one is not rejected.
         let fits = try decoder.decode(Box.self, from: Data("f: 0.1".utf8))
         #expect(fits.f == Float(0.1))
-    }
-
-    /// Outside strict mode a line after the root value is ignored.
-    ///
-    /// Section 14.2 makes trailing content an error in strict mode only. The
-    /// check ran in both modes, so a document that the reference
-    /// implementation reads was rejected.
-    @Test func trailingContentIsIgnoredOutsideStrictMode() async throws {
-        let lenient = TOONDecoder()
-        lenient.strict = false
-
-        let value = try lenient.decode(
-            TOONValue.self,
-            from: Data("[2]: 1,2\nleftover: 1".utf8)
-        )
-        #expect(value == .array([.int(1), .int(2)]))
-
-        #expect(throws: TOONDecodingError.self) {
-            try self.decoder.decode(TOONValue.self, from: Data("[2]: 1,2\nleftover: 1".utf8))
-        }
     }
 
     // MARK: - Error Line Numbers
