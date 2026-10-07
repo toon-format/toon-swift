@@ -403,7 +403,7 @@ private final class Parser {
 
         // Root array: first line is a valid array header WITHOUT a key (e.g., "[3]:" not "items[3]:")
         // An array header without key starts with "[" immediately
-        if firstContent.hasPrefix("["), let header = try parseHeaderIfPresent(String(firstContent)) {
+        if firstContent.unicodeScalars.first == "[", let header = try parseHeaderIfPresent(String(firstContent)) {
             currentLine = nonEmptyLines[0].offset + 1
             let root = try parseArrayContent(header: header, atDepth: 0)
             try rejectTrailingContentAfterRoot()
@@ -414,7 +414,7 @@ private final class Parser {
         // A key-value pair has an unquoted colon, even one inside brackets
         if nonEmptyLines.count == 1 {
             let contentStr = String(firstContent)
-            if findUnquotedColon(in: firstContent) == nil {
+            if findUnquotedColon(in: firstContent.unicodeScalars) == nil {
                 return try parsePrimitiveValue(contentStr)
             }
         }
@@ -433,23 +433,24 @@ private final class Parser {
     /// Strict mode rejects a tab or a count that is not a multiple of the
     /// indent size in the pre-pass, so the rule only matters outside it.
     private func trimIndentation(_ line: String) -> (depth: Int, content: Substring) {
+        let scalars = line.unicodeScalars
         var spaces = 0
         var tabs = 0
-        var index = line.startIndex
+        var index = scalars.startIndex
 
-        while index < line.endIndex {
-            if line[index] == " " {
+        while index < scalars.endIndex {
+            if scalars[index] == " " {
                 spaces += 1
-            } else if line[index] == "\t" {
+            } else if scalars[index] == "\t" {
                 tabs += 1
             } else {
                 break
             }
-            index = line.index(after: index)
+            index = scalars.index(after: index)
         }
 
         let depth = (indentSize > 0 ? spaces / indentSize : 0) + tabs
-        return (depth, line[index...])
+        return (depth, Substring(scalars[index...]))
     }
 
     private func peekLine() -> String? {
@@ -604,15 +605,16 @@ private final class Parser {
         }
 
         // Parse as key: value
-        guard let colonIndex = findUnquotedColon(in: content[...]) else {
+        let scalars = content.unicodeScalars[...]
+        guard let colonIndex = findUnquotedColon(in: scalars) else {
             throw TOONDecodingError.invalidFormat("Expected key: value at line \(lastReadSourceLine), got: \(content)")
         }
 
-        let keyPart = String(content[..<colonIndex])
+        let keyPart = String(scalars[..<colonIndex])
         let key = try parseKey(keyPart)
 
-        let afterColon = content.index(after: colonIndex)
-        let valuePart = String(content[afterColon...]).trimmingLeadingSpace()
+        let afterColon = scalars.index(after: colonIndex)
+        let valuePart = String(scalars[afterColon...]).trimmingLeadingSpace()
 
         if valuePart.isEmpty {
             // Nested object or empty value
@@ -632,18 +634,19 @@ private final class Parser {
 
         // A key that begins with a quote must end at its closing quote, like
         // a quoted value. `"a"\t` is not the key `a`.
-        if trimmed.hasPrefix("\"") {
-            guard let closing = findClosingQuote(in: trimmed[...]) else {
+        let scalars = trimmed.unicodeScalars[...]
+        if scalars.first == "\"" {
+            guard let closing = findClosingQuote(in: scalars) else {
                 throw TOONDecodingError.invalidFormat(
                     "Unterminated quoted key at line \(lastReadSourceLine)"
                 )
             }
-            guard trimmed.index(after: closing) == trimmed.endIndex else {
+            guard scalars.index(after: closing) == scalars.endIndex else {
                 throw TOONDecodingError.invalidFormat(
                     "Characters after the closing quote of a key at line \(lastReadSourceLine)"
                 )
             }
-            let inner = String(trimmed[trimmed.index(after: trimmed.startIndex) ..< closing])
+            let inner = String(scalars[scalars.index(after: scalars.startIndex) ..< closing])
             return try unescapeString(inner)
         }
 
@@ -705,8 +708,9 @@ private final class Parser {
         var escaped = false
         var bracketIndex: String.Index?
 
-        for index in content.indices {
-            let char = content[index]
+        let scalars = content.unicodeScalars
+        for index in scalars.indices {
+            let char = scalars[index]
             if escaped {
                 escaped = false
                 continue
@@ -741,7 +745,7 @@ private final class Parser {
         // Pattern: [key][N{delimiter}]{fields}:
         // Examples: [3]:, key[2]:, items[3]{a,b,c}:, items[2|]{a|b}:
 
-        var remaining = content[...]
+        var remaining = content.unicodeScalars[...]
 
         // Extract key (optional)
         var key: String? = nil
@@ -759,7 +763,7 @@ private final class Parser {
                 // Specification 6 forbids whitespace between a key and its
                 // bracket segment; the token trimming of section 12 does not
                 // reach here.
-                if keyPart.endsWithWhitespace {
+                if Substring(keyPart).endsWithWhitespace {
                     throw TOONDecodingError.invalidHeader(
                         "Whitespace between the key and its bracket segment: \(content)"
                     )
@@ -787,7 +791,7 @@ private final class Parser {
         // which specification 6 does not allow here.
         var countStr = ""
         while let char = remaining.first, char.isASCIIDigit {
-            countStr.append(char)
+            countStr.unicodeScalars.append(char)
             remaining = remaining.dropFirst()
         }
 
@@ -870,11 +874,11 @@ private final class Parser {
             delimiter: delimiter,
             fields: fields,
             isKeyed: isKeyed,
-            inlineContent: remaining.dropFirst().trimmingLeadingSpace()
+            inlineContent: Substring(remaining.dropFirst()).trimmingLeadingSpace()
         )
     }
 
-    private func findClosingQuote(in str: Substring) -> String.Index? {
+    private func findClosingQuote(in str: Substring.UnicodeScalarView) -> String.Index? {
         var escaped = false
         var index = str.index(after: str.startIndex)  // Skip opening quote
 
@@ -895,7 +899,7 @@ private final class Parser {
 
     /// The position of the brace that closes the field list that starts after
     /// the opening brace. A brace inside a quoted name is content.
-    private func findMatchingBrace(in text: Substring) -> Substring.Index? {
+    private func findMatchingBrace(in text: Substring.UnicodeScalarView) -> String.Index? {
         var depth = 0
         var inQuotes = false
         var escaped = false
@@ -950,22 +954,22 @@ private final class Parser {
         var escaped = false
         var braceDepth = 0
 
-        for char in fieldsStr {
+        for char in fieldsStr.unicodeScalars {
             if escaped {
-                current.append(char)
+                current.unicodeScalars.append(char)
                 escaped = false
                 continue
             }
 
             if inQuotes, char == "\\" {
                 escaped = true
-                current.append(char)
+                current.unicodeScalars.append(char)
                 continue
             }
 
             if char == "\"" {
                 inQuotes.toggle()
-                current.append(char)
+                current.unicodeScalars.append(char)
                 continue
             }
 
@@ -994,7 +998,7 @@ private final class Parser {
                 }
             }
 
-            current.append(char)
+            current.unicodeScalars.append(char)
         }
 
         guard braceDepth == 0 else {
@@ -1012,18 +1016,19 @@ private final class Parser {
     private func parseField(_ field: String, delimiter: String, depth: Int) throws -> FieldNode {
         let trimmed = field.trimmingSpaces()
 
-        guard let braceIndex = indexOfGroupBrace(in: trimmed) else {
+        let scalars = trimmed.unicodeScalars[...]
+        guard let braceIndex = indexOfGroupBrace(in: scalars) else {
             guard !trimmed.isEmpty else {
                 throw TOONDecodingError.invalidHeader("Empty field entry in the field list: \(field)")
             }
             return FieldNode(name: try parseKey(trimmed))
         }
 
-        guard trimmed.hasSuffix("}") else {
+        guard scalars.last == "}" else {
             throw TOONDecodingError.invalidHeader("Unterminated field group in: \(field)")
         }
 
-        let name = String(trimmed[..<braceIndex])
+        let name = String(scalars[..<braceIndex])
         guard !name.isEmpty else {
             throw TOONDecodingError.invalidHeader("A nested field group without a name: \(field)")
         }
@@ -1035,8 +1040,8 @@ private final class Parser {
             )
         }
 
-        let innerStart = trimmed.index(after: braceIndex)
-        let inner = String(trimmed[innerStart ..< trimmed.index(before: trimmed.endIndex)])
+        let innerStart = scalars.index(after: braceIndex)
+        let inner = String(scalars[innerStart ..< scalars.index(before: scalars.endIndex)])
 
         let children = try parseFieldsList(inner, delimiter: delimiter, depth: depth + 1)
 
@@ -1045,7 +1050,7 @@ private final class Parser {
 
     /// The position of the brace that opens a nested group, skipping a brace
     /// that sits inside a quoted name.
-    private func indexOfGroupBrace(in field: String) -> String.Index? {
+    private func indexOfGroupBrace(in field: Substring.UnicodeScalarView) -> String.Index? {
         var inQuotes = false
         var escaped = false
         var index = field.startIndex
@@ -1197,15 +1202,16 @@ private final class Parser {
 
             // Specification 9.5: a line at entry depth without an unquoted
             // colon is an error.
-            guard let colonIndex = findUnquotedColon(in: content) else {
+            let scalars = content.unicodeScalars
+            guard let colonIndex = findUnquotedColon(in: scalars) else {
                 throw TOONDecodingError.invalidFormat(
                     "An entry row of a keyed scope needs a colon, at line "
                         + "\(lastReadSourceLine)"
                 )
             }
 
-            let entryKey = try parseKey(String(content[..<colonIndex]))
-            let rest = content[content.index(after: colonIndex)...].trimmingLeadingSpace()
+            let entryKey = try parseKey(String(scalars[..<colonIndex]))
+            let rest = Substring(scalars[scalars.index(after: colonIndex)...]).trimmingLeadingSpace()
             let cells = try parseDelimitedValues(String(rest), delimiter: header.delimiter)
 
             // Specification 14.1 makes a width mismatch an error in both
@@ -1237,12 +1243,17 @@ private final class Parser {
     }
 
     /// The position of the first colon that sits outside a quoted span.
-    private func findUnquotedColon(in text: Substring) -> Substring.Index? {
+    private func findUnquotedColon(in text: Substring.UnicodeScalarView) -> String.Index? {
         findUnquoted(":", in: text)
     }
 
     /// The position of the first occurrence of `target` outside a quoted span.
-    private func findUnquoted(_ target: Character, in text: Substring) -> Substring.Index? {
+    ///
+    /// This scan and the other scans of the parser run over Unicode scalars.
+    /// Specification 1.2 matches a syntax character as one scalar, while a
+    /// Swift `Character` joins a combining mark to the colon or delimiter
+    /// before it.
+    private func findUnquoted(_ target: Unicode.Scalar, in text: Substring.UnicodeScalarView) -> String.Index? {
         var inQuotes = false
         var escaped = false
         var index = text.startIndex
@@ -1301,8 +1312,8 @@ private final class Parser {
 
             // A line whose first unquoted colon comes before its first
             // unquoted delimiter is a key-value line, which ends the rows.
-            if let colon = findUnquotedColon(in: content) {
-                let separator = findUnquoted(Character(delimiter), in: content)
+            if let colon = findUnquotedColon(in: content.unicodeScalars) {
+                let separator = findUnquoted(Unicode.Scalar(delimiter)!, in: content.unicodeScalars)
                 if separator.map({ colon < $0 }) ?? true {
                     break
                 }
@@ -1374,14 +1385,15 @@ private final class Parser {
 
             // A line of the scope that is not a list item ends it. The bare
             // marker of section 9.4 is a hyphen with nothing after it.
-            guard content.hasPrefix("- ") || content == "-" else { break }
+            let scalars = content.unicodeScalars
+            guard scalars.starts(with: "- ".unicodeScalars) || content == "-" else { break }
 
             _ = consumeLine()
             openSpanDepth = openSpanDepth ?? depth + 1
 
             // Specification 5.2: the hyphen may carry several spaces, and the
             // item starts after all of them, so `-   [2]: x` is a keyless header.
-            let itemContent = String(content.dropFirst().drop { $0 == " " })
+            let itemContent = String(scalars.dropFirst().drop { $0 == " " })
             let item = try parseListItemContent(itemContent, atDepth: expectedDepth, delimiter: delimiter)
             try checkArrayLength(items.count + 1)
             items.append(item)
@@ -1427,7 +1439,8 @@ private final class Parser {
         }
 
         // Check for key: value on same line (may be key[N]: values for array)
-        if let colonIndex = findUnquotedColon(in: content[...]) {
+        let scalars = content.unicodeScalars[...]
+        if let colonIndex = findUnquotedColon(in: scalars) {
             var objectValues: ObjectStorage = [:]
 
             // A header on the hyphen line describes the first field of the
@@ -1436,8 +1449,8 @@ private final class Parser {
             if let header, let headerKey = header.key {
                 objectValues[headerKey] = try parseArrayContent(header: header, atDepth: depth + 1)
             } else {
-                let key = try parseKey(String(content[..<colonIndex]))
-                let valuePart = String(content[content.index(after: colonIndex)...]).trimmingLeadingSpace()
+                let key = try parseKey(String(scalars[..<colonIndex]))
+                let valuePart = String(scalars[scalars.index(after: colonIndex)...]).trimmingLeadingSpace()
 
                 if valuePart.isEmpty {
                     // The first field sits one level below the hyphen line, so
@@ -1487,22 +1500,22 @@ private final class Parser {
         var inQuotes = false
         var escaped = false
 
-        for char in content {
+        for char in content.unicodeScalars {
             if escaped {
-                current.append(char)
+                current.unicodeScalars.append(char)
                 escaped = false
                 continue
             }
 
             if inQuotes, char == "\\" {
                 escaped = true
-                current.append(char)
+                current.unicodeScalars.append(char)
                 continue
             }
 
             if char == "\"" {
                 inQuotes.toggle()
-                current.append(char)
+                current.unicodeScalars.append(char)
                 continue
             }
 
@@ -1512,7 +1525,7 @@ private final class Parser {
                 continue
             }
 
-            current.append(char)
+            current.unicodeScalars.append(char)
         }
 
         // Handle last value
@@ -1550,18 +1563,19 @@ private final class Parser {
         // with a quote must end at its closing quote. The rule holds in both
         // modes. A missing quote is an error, and so is any character after the
         // closing one.
-        if trimmed.hasPrefix("\"") {
-            guard let closing = findClosingQuote(in: trimmed[...]) else {
+        let scalars = trimmed.unicodeScalars[...]
+        if scalars.first == "\"" {
+            guard let closing = findClosingQuote(in: scalars) else {
                 throw TOONDecodingError.invalidFormat(
                     "Unterminated quoted value at line \(lastReadSourceLine)"
                 )
             }
-            guard trimmed.index(after: closing) == trimmed.endIndex else {
+            guard scalars.index(after: closing) == scalars.endIndex else {
                 throw TOONDecodingError.invalidFormat(
                     "Characters after the closing quote at line \(lastReadSourceLine)"
                 )
             }
-            let inner = String(trimmed[trimmed.index(after: trimmed.startIndex) ..< closing])
+            let inner = String(scalars[scalars.index(after: scalars.startIndex) ..< closing])
             return try .string(unescapeString(inner))
         }
 
@@ -2371,8 +2385,8 @@ private func decodeUInt64(from value: Value) throws -> UInt64 {
 
 private extension String {
     func trimmingLeadingSpace() -> String {
-        guard let first = first, first == " " else { return self }
-        return String(dropFirst())
+        guard unicodeScalars.first == " " else { return self }
+        return String(unicodeScalars.dropFirst())
     }
 
     var isValidDottedPath: Bool {
@@ -2385,8 +2399,8 @@ private extension String {
 
 private extension Substring {
     func trimmingLeadingSpace() -> Substring {
-        guard let first = first, first == " " else { return self }
-        return dropFirst()
+        guard unicodeScalars.first == " " else { return self }
+        return Substring(unicodeScalars.dropFirst())
     }
 
     var isValidIdentifier: Bool {
@@ -2420,11 +2434,6 @@ extension StringProtocol {
     fileprivate var endsWithWhitespace: Bool {
         unicodeScalars.last == " " || unicodeScalars.last == "\t"
     }
-}
-
-extension Character {
-    /// `true` for U+0030 to U+0039 only.
-    fileprivate var isASCIIDigit: Bool { self >= "0" && self <= "9" }
 }
 
 extension Unicode.Scalar {
