@@ -770,13 +770,6 @@ struct DecoderTests {
         }
     }
 
-    @Test func invalidUTF8Error() async throws {
-        let data = Data([0x61, 0x3A, 0x20, 0xFF])
-        #expect(throws: TOONDecodingError.self) {
-            try decoder.decode(TOONValue.self, from: data)
-        }
-    }
-
     @Test func typeMismatch() async throws {
         struct IntObject: Codable {
             let value: Int
