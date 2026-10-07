@@ -1911,13 +1911,16 @@ private extension String {
             }
         }
 
-        if contains(delimiter) {
+        // A scalar test, because specification 1.2 matches a syntax character
+        // as one scalar, and a Character test misses a delimiter, hyphen, or
+        // number sign that a combining mark follows.
+        if unicodeScalars.contains(where: { String($0) == delimiter }) {
             return false
         }
 
         // A hyphen at position 0 reads as the list marker, and a number sign
         // at position 0 reads as a comment line (section 5.1).
-        if hasPrefix("-") || hasPrefix("#") {
+        if unicodeScalars.first == "-" || unicodeScalars.first == "#" {
             return false
         }
 
