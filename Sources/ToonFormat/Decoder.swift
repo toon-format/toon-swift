@@ -348,16 +348,11 @@ private final class Parser {
     /// Rejects a line that follows a root scope.
     ///
     /// Specification 5 gives a document one root value. A line left over after
-    /// the root array or the root keyed scope is trailing content.
-    ///
-    /// Specification 14.2 makes that an error in strict mode. A decoder
-    /// outside strict mode may ignore the line instead, and the reference
-    /// implementation does. A line without an unquoted colon is a scalar
-    /// line, which no mode accepts there.
+    /// the root array or the root keyed scope is trailing content, which
+    /// specification 14.2 makes an error in both modes.
     private func rejectTrailingContentAfterRoot() throws {
         while currentLine < lines.count {
-            let content = trimIndentation(lines[currentLine]).content
-            if !content.isEmpty, strict || findUnquotedColon(in: content) == nil {
+            if !lines[currentLine].isEmpty {
                 throw TOONDecodingError.invalidFormat(
                     "Trailing content after the root value, at line \(sourceLine(currentLine))"
                 )
@@ -368,15 +363,12 @@ private final class Parser {
 
     func parse() throws -> Value {
         // An indented line before the first line at depth 0 belongs to no
-        // scope: strict mode rejects it, and the root form starts after it.
-        var skippedLeadingLine = false
+        // scope.
         while let line = peekLine(), line.isEmpty || trimIndentation(line).depth > 0 {
-            if line.isEmpty {
-                currentLine += 1
-            } else {
-                try skipOverIndentedLine(expectedDepth: 0)
-                skippedLeadingLine = true
+            if !line.isEmpty {
+                throw overIndentedLineError(expectedDepth: 0)
             }
+            currentLine += 1
         }
 
         // Filter out empty lines for root detection, but keep track of original positions
@@ -407,7 +399,7 @@ private final class Parser {
 
         // Single primitive: exactly one non-empty line that's not an object key-value pair
         // A key-value pair has an unquoted colon, even one inside brackets
-        if nonEmptyLines.count == 1, !skippedLeadingLine {
+        if nonEmptyLines.count == 1 {
             let contentStr = String(firstContent)
             if findUnquotedColon(in: firstContent) == nil {
                 return try parsePrimitiveValue(contentStr)
@@ -489,21 +481,15 @@ private final class Parser {
         }
     }
 
-    /// Consumes a line that sits deeper than the content of its scope, after
-    /// a line that opened no scope.
-    ///
-    /// Such a line belongs to no scope. Strict mode rejects it. Outside strict
-    /// mode the line is skipped, unless it is a scalar line, which no mode
-    /// accepts.
-    private func skipOverIndentedLine(expectedDepth: Int) throws {
-        let (lineDepth, content) = trimIndentation(lines[currentLine])
-        if strict || findUnquotedColon(in: content) == nil {
-            throw TOONDecodingError.invalidIndentation(
-                line: sourceLine(currentLine),
-                message: "Expected indentation depth \(expectedDepth), got \(lineDepth)"
-            )
-        }
-        currentLine += 1
+    /// The error for the current line, which sits deeper than the content of
+    /// its scope after a line that opened no scope. Such a line belongs to no
+    /// scope (specification 8).
+    private func overIndentedLineError(expectedDepth: Int) -> TOONDecodingError {
+        let lineDepth = trimIndentation(lines[currentLine]).depth
+        return .invalidIndentation(
+            line: sourceLine(currentLine),
+            message: "Expected indentation depth \(expectedDepth), got \(lineDepth)"
+        )
     }
 
     /// Stores a sibling key, per TOON specification 14.3.
@@ -560,8 +546,7 @@ private final class Parser {
             }
 
             if lineDepth != depth {
-                try skipOverIndentedLine(expectedDepth: depth)
-                continue
+                throw overIndentedLineError(expectedDepth: depth)
             }
 
             _ = consumeLine()
@@ -604,11 +589,9 @@ private final class Parser {
             }
             // Specification 6 allows a keyless header only at the document
             // root and, without a field list, as a list item.
-            if strict {
-                throw TOONDecodingError.invalidHeader(
-                    "A keyless array header is not allowed in object field position: \(content)"
-                )
-            }
+            throw TOONDecodingError.invalidHeader(
+                "A keyless array header is not allowed in object field position: \(content)"
+            )
         }
 
         // Parse as key: value
@@ -740,21 +723,9 @@ private final class Parser {
     /// Specification 5.2 classifies a line as an array header when an
     /// unquoted `[` comes before the first unquoted colon. A line of that
     /// shape that does not parse is a defect, not a key-value pair.
-    /// Specification 6 lets a decoder outside strict mode fall back to a
-    /// key-value pair, so only strict mode reports the defect.
     private func parseHeaderIfPresent(_ content: String) throws -> ArrayHeader? {
         guard let bracketIndex = headerBracketIndex(content) else { return nil }
-        do {
-            let header = try parseArrayHeader(content, bracketIndex: bracketIndex)
-            // Specification 6 forbids content after the colon of a header that
-            // carries a field list. Outside strict mode the line reads as a
-            // key-value line; strict mode reports it in parseArrayContent.
-            if !strict, header.fields != nil, !header.inlineContent.isEmpty { return nil }
-            return header
-        } catch {
-            if strict { throw error }
-            return nil
-        }
+        return try parseArrayHeader(content, bracketIndex: bracketIndex)
     }
 
     private func parseArrayHeader(_ content: String, bracketIndex: String.Index) throws -> ArrayHeader {
@@ -1090,10 +1061,7 @@ private final class Parser {
     /// Builds one row object by walking the field tree against the cells.
     ///
     /// Specification 9.3 maps the cells to the leaves in depth-first order.
-    /// Specification 14.1 gives two rules for non-strict mode. A leaf with no
-    /// remaining cell is absent from the object, and is not null. A surplus
-    /// cell contributes nothing. A nested group still materializes when no
-    /// cell remains for it, as an empty object.
+    /// The callers check the width first, so every leaf has its cell.
     private func materializeRow(fields: [FieldNode], cells: [Value], cursor: inout Int) -> Value {
         var values: ObjectStorage = [:]
 
@@ -1102,7 +1070,6 @@ private final class Parser {
             if let children = field.children {
                 value = materializeRow(fields: children, cells: cells, cursor: &cursor)
             } else {
-                guard cursor < cells.count else { continue }
                 value = cells[cursor]
                 cursor += 1
             }
@@ -1126,7 +1093,7 @@ private final class Parser {
     private func parseArrayContent(header: ArrayHeader, atDepth depth: Int) throws -> Value {
         // Specification 6 forbids content after the colon of a header that
         // carries a field list: the rows live on the lines below it.
-        if strict, header.fields != nil, !header.inlineContent.isEmpty {
+        if header.fields != nil, !header.inlineContent.isEmpty {
             throw TOONDecodingError.invalidHeader(
                 "Content after the colon of a header that carries a field list, at line "
                     + "\(sourceLine(currentLine - 1))"
@@ -1213,33 +1180,28 @@ private final class Parser {
             }
 
             if lineDepth != expectedDepth {
-                try skipOverIndentedLine(expectedDepth: expectedDepth)
-                continue
+                throw overIndentedLineError(expectedDepth: expectedDepth)
             }
 
             _ = consumeLine()
             openSpanDepth = openSpanDepth ?? depth + 1
 
             // Specification 9.5: a line at entry depth without an unquoted
-            // colon is an error in strict mode, and may be skipped otherwise.
+            // colon is an error.
             guard let colonIndex = findUnquotedColon(in: content) else {
-                if strict {
-                    throw TOONDecodingError.invalidFormat(
-                        "An entry row of a keyed scope needs a colon, at line "
-                            + "\(lastReadSourceLine)"
-                    )
-                }
-                continue
+                throw TOONDecodingError.invalidFormat(
+                    "An entry row of a keyed scope needs a colon, at line "
+                        + "\(lastReadSourceLine)"
+                )
             }
 
             let entryKey = try parseKey(String(content[..<colonIndex]))
             let rest = content[content.index(after: colonIndex)...].trimmingLeadingSpace()
             let cells = try parseDelimitedValues(String(rest), delimiter: header.delimiter)
 
-            // Specification 14.1 makes a width mismatch an error in strict
-            // mode only. Outside strict mode ``materializeRow`` keeps a leaf
-            // with no cell absent, and drops a surplus cell.
-            if cells.count != width, strict {
+            // Specification 14.1 makes a width mismatch an error in both
+            // modes.
+            if cells.count != width {
                 throw TOONDecodingError.fieldCountMismatch(
                     expected: width,
                     actual: cells.count,
@@ -1325,8 +1287,7 @@ private final class Parser {
             }
 
             if lineDepth != expectedDepth {
-                try skipOverIndentedLine(expectedDepth: expectedDepth)
-                continue
+                throw overIndentedLineError(expectedDepth: expectedDepth)
             }
 
             // A line whose first unquoted colon comes before its first
@@ -1346,10 +1307,9 @@ private final class Parser {
             // The width of a row is the number of leaves, not the number of
             // entries of the field list: a nested group spans several cells.
             let width = fields.leafCount
-            // Specification 14.1 makes a width mismatch an error in strict
-            // mode only. Outside strict mode ``materializeRow`` keeps a leaf
-            // with no cell absent, and drops a surplus cell.
-            if cells.count != width, strict {
+            // Specification 14.1 makes a width mismatch an error in both
+            // modes.
+            if cells.count != width {
                 throw TOONDecodingError.fieldCountMismatch(
                     expected: width,
                     actual: cells.count,
@@ -1400,8 +1360,7 @@ private final class Parser {
             }
 
             if lineDepth != expectedDepth {
-                try skipOverIndentedLine(expectedDepth: expectedDepth)
-                continue
+                throw overIndentedLineError(expectedDepth: expectedDepth)
             }
 
             // A line of the scope that is not a list item ends it. The bare
@@ -1444,18 +1403,16 @@ private final class Parser {
         // Check for array header WITHOUT key: - [N]: a,b,c
         // This returns a bare array, not an object with an array field
         // Specification 6 allows a keyless header as a list item only without
-        // a field list. Outside strict mode the line reads as a key-value line.
+        // a field list.
         let header = try parseHeaderIfPresent(content)
         if let header, header.key == nil {
-            if header.fields == nil {
-                return try parseArrayContent(header: header, atDepth: depth)
-            }
-            if strict {
+            guard header.fields == nil else {
                 throw TOONDecodingError.invalidHeader(
                     "A keyless header that carries a field list is not allowed as a list item: "
                         + content
                 )
             }
+            return try parseArrayContent(header: header, atDepth: depth)
         }
 
         // Check for key: value on same line (may be key[N]: values for array)
@@ -1495,8 +1452,7 @@ private final class Parser {
                 }
 
                 if nextDepth > depth + 1 {
-                    try skipOverIndentedLine(expectedDepth: depth + 1)
-                    continue
+                    throw overIndentedLineError(expectedDepth: depth + 1)
                 }
 
                 _ = consumeLine()
