@@ -750,7 +750,7 @@ private final class Parser {
                 // Specification 6 forbids whitespace between a key and its
                 // bracket segment; the token trimming of section 12 does not
                 // reach here.
-                if keyPart.last?.isWhitespace == true {
+                if keyPart.endsWithWhitespace {
                     throw TOONDecodingError.invalidHeader(
                         "Whitespace between the key and its bracket segment: \(content)"
                     )
@@ -1015,12 +1015,12 @@ private final class Parser {
         }
 
         let name = String(trimmed[..<braceIndex])
-        guard let last = name.last else {
+        guard !name.isEmpty else {
             throw TOONDecodingError.invalidHeader("A nested field group without a name: \(field)")
         }
         // Token trimming stops short of a nested group, so whitespace before
         // its brace is a defect, not padding.
-        if last.isWhitespace {
+        if name.endsWithWhitespace {
             throw TOONDecodingError.invalidHeader(
                 "Whitespace between a field name and its nested field group: \(field)"
             )
@@ -2401,6 +2401,13 @@ extension StringProtocol {
             scalars = scalars.dropLast()
         }
         return String(String.UnicodeScalarView(scalars))
+    }
+
+    /// Whether the text ends in SP or HTAB, the only whitespace of TOON
+    /// specification 1.2. `Character.isWhitespace` also matches a no-break
+    /// space, which is content.
+    fileprivate var endsWithWhitespace: Bool {
+        unicodeScalars.last == " " || unicodeScalars.last == "\t"
     }
 }
 
