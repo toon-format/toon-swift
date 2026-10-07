@@ -1370,7 +1370,9 @@ private final class Parser {
             _ = consumeLine()
             openSpanDepth = openSpanDepth ?? depth + 1
 
-            let itemContent = content.hasPrefix("- ") ? String(content.dropFirst(2)) : ""
+            // Specification 5.2: the hyphen may carry several spaces, and the
+            // item starts after all of them, so `-   [2]: x` is a keyless header.
+            let itemContent = String(content.dropFirst().drop { $0 == " " })
             let item = try parseListItemContent(itemContent, atDepth: expectedDepth, delimiter: delimiter)
             try checkArrayLength(items.count + 1)
             items.append(item)
