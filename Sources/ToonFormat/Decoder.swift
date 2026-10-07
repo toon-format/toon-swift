@@ -67,12 +67,25 @@ public final class TOONDecoder {
     /// TOON specification 13 defines this option, with a default of `true`.
     ///
     /// In strict mode a document must satisfy every rule of section 14. The
-    /// declared counts must match. A field name must not repeat. The
-    /// indentation must be exact. In non-strict mode a decoder resolves what it
-    /// can, for example a repeated key by last write wins (section 14.3).
+    /// declared counts must match. A key or a field name must not repeat. The
+    /// indentation must be exact.
     ///
-    /// Set this property to `false` to accept a document that an earlier
-    /// release accepted but section 14 rejects.
+    /// Set this property to `false` to apply the five recoveries of section
+    /// 14.4, and nothing else:
+    ///
+    /// - A declared `[N]` is advisory. The decoder reads every value, row,
+    ///   entry and item of the scope. The width of a row is still checked.
+    /// - A repeated key or field name resolves by last write wins.
+    /// - The depth of a line is its tabs plus its spaces divided by
+    ///   ``indentSize``, rounded down, counted over the whole leading run of
+    ///   spaces and tabs.
+    /// - A blank line inside the rows, entries or items of a header is
+    ///   ignored.
+    /// - A first line deeper than its scope sets the depth of that scope.
+    ///
+    /// Every other defect of section 14 is an error in both modes, among
+    /// them a malformed header, a row of the wrong width, an over-indented
+    /// line and a line after the root array.
     public var strict: Bool = true
 
     /// Limits for decoding to prevent resource exhaustion.
@@ -414,15 +427,11 @@ private final class Parser {
 
     /// Splits a line into its depth and its content.
     ///
-    /// The depth uses the floor of the division. TOON specification 12 allows
-    /// that leniency for an indentation that is not a multiple of the indent
-    /// size. Strict mode rejects such a line in the pre-pass.
-    ///
-    /// Specification 12 also allows a decoder to accept a tab in the
-    /// indentation outside strict mode. It requires the depth rule for a tab to
-    /// be documented. This decoder counts one tab as one level. Strict mode
-    /// rejects a tab in the pre-pass, so a tab reaches this point only in
-    /// non-strict mode.
+    /// The depth is the number of tabs plus the number of spaces divided by
+    /// the indent size, rounded down, over the whole leading run of spaces
+    /// and tabs. That is the indentation recovery of TOON specification 14.4.
+    /// Strict mode rejects a tab or a count that is not a multiple of the
+    /// indent size in the pre-pass, so the rule only matters outside it.
     private func trimIndentation(_ line: String) -> (depth: Int, content: Substring) {
         var spaces = 0
         var tabs = 0

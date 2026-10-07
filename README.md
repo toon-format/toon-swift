@@ -82,6 +82,7 @@ and implements the following features:
 - [x] Inline format for primitive arrays
 - [x] Expanded list format for nested structures
 - [x] Strict mode (default) with the full error surface of section 14
+- [x] Non-strict mode (`strict = false`) with exactly the five recoveries of section 14.4
 - [x] Key identity by Unicode scalar sequence, so two keys that differ only in normalization form stay apart
 - [x] Detailed error reporting with line numbers
 - [x] Configurable decoding limits for security

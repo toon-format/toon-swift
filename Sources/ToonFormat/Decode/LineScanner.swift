@@ -33,8 +33,8 @@ enum LineScanner {
     /// 3. Strip the trailing spaces (U+0020) of a line. A line whose content
     ///    is `-` followed only by spaces is therefore the bare marker of an
     ///    empty-object list item. It is not a list item with an empty token.
-    ///    Outside strict mode a tab is indentation, so a line of tabs and
-    ///    spaces is blank.
+    ///    Outside strict mode a tab is indentation (§ 14.4), so a line of tabs
+    ///    and spaces is blank.
     /// 4. Remove the comment lines (§ 5.1). A comment line is a line whose
     ///    first character after zero or more leading spaces is `#`. Only
     ///    spaces may precede the `#`, so a line indented with a tab is
@@ -44,8 +44,8 @@ enum LineScanner {
     /// - Parameters:
     ///   - indentSize: The number of spaces of one level, for the strict
     ///     indentation checks of section 12.
-    ///   - strict: Whether to apply those checks. In non-strict mode the depth
-    ///     uses the floor of the division, which section 12 permits.
+    ///   - strict: Whether to apply those checks. In non-strict mode the
+    ///     indentation recovery of section 14.4 applies instead.
     static func scan(_ text: String, indentSize: Int, strict: Bool) throws -> ScannedDocument {
         // The scan runs over Unicode scalars, not over Characters. Swift treats
         // "\r\n" as one grapheme cluster, so a split of a String on "\n" does
