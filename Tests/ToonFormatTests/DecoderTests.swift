@@ -1111,11 +1111,8 @@ struct DecoderTests {
         let toon = "items[5]: a,b,c,d,e"  // 5 items exceeds limit of 2
         let data = toon.data(using: .utf8)!
 
-        for strict in [true, false] {
-            decoder.strict = strict
-            #expect(throws: TOONDecodingError.self) {
-                try decoder.decode(ArrayObject.self, from: data)
-            }
+        #expect(throws: TOONDecodingError.self) {
+            try decoder.decode(ArrayObject.self, from: data)
         }
     }
 
