@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/toon-format/toon-swift/actions/workflows/ci.yml/badge.svg)](https://github.com/toon-format/toon-swift/actions)
 [![Swift Version](https://img.shields.io/badge/swift-6.0+-orange.svg)](https://swift.org)
-[![SPEC v4.3](https://img.shields.io/badge/spec-v4.3-fef3c0?labelColor=1b1b1f)](https://github.com/toon-format/spec)
+[![SPEC v4.4](https://img.shields.io/badge/spec-v4.4-fef3c0?labelColor=1b1b1f)](https://github.com/toon-format/spec)
 [![License: MIT](https://img.shields.io/badge/license-MIT-fef3c0?labelColor=1b1b1f)](./LICENSE)
 
 Compact, human-readable serialization format for LLM contexts with **30-60% token reduction** vs JSON. 
@@ -51,7 +51,7 @@ see the [TOON specification](https://github.com/toon-format/spec).
 
 ### TOONEncoder
 
-`TOONEncoder` conforms to **TOON specification version 4.3** (2026-10-06)
+`TOONEncoder` conforms to **TOON specification version 4.4** (2026-10-08)
 and implements the following features:
 
 - [x] Canonical number formatting with enough precision to read back exactly
@@ -69,7 +69,7 @@ and implements the following features:
 
 ### TOONDecoder
 
-`TOONDecoder` conforms to **TOON specification version 4.3** (2026-10-06)
+`TOONDecoder` conforms to **TOON specification version 4.4** (2026-10-08)
 and implements the following features:
 
 - [x] Escape sequence parsing (`\\`, `\"`, `\n`, `\r`, `\t`, `\uXXXX`)
@@ -446,7 +446,7 @@ Use `.unlimited` for trusted data only.
 Check the supported TOON specification version:
 
 ```swift
-print(toonSpecVersion) // "4.3"
+print(toonSpecVersion) // "4.4"
 ```
 
 ## Contributing
@@ -470,9 +470,9 @@ Please report unacceptable behavior to hello@johannschopplich.com.
 
 ## Project Status
 
-This library implements **TOON specification version 4.3** (2026-10-06) 
+This library implements **TOON specification version 4.4** (2026-10-08) 
 with full encoding and decoding support. 
-It satisfies all 545 conformance fixtures published by the specification.
+It satisfies all 564 conformance fixtures published by the specification.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 

@@ -125,7 +125,7 @@ struct FixtureTests {
             return
         }
         // The tag adds a patch number to the version of the specification,
-        // so `4.3` targets a tag such as `v4.3.0`.
+        // so `4.4` targets a tag such as `v4.4.0`.
         #expect(ref.hasPrefix("v\(toonSpecVersion)."))
 
         guard case let .string(sha)? = Fixtures.provenance["sha"] else {

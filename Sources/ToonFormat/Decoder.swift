@@ -2,7 +2,7 @@ import Foundation
 
 /// A decoder that converts TOON format data into Swift values.
 ///
-/// This decoder conforms to the TOON (Token-Oriented Object Notation) specification version 4.3.
+/// This decoder conforms to the TOON (Token-Oriented Object Notation) specification version 4.4.
 /// For more information, see https://github.com/toon-format/spec
 public final class TOONDecoder {
     /// The path expansion mode for dotted keys.
