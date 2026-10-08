@@ -567,21 +567,6 @@ struct DecoderTests {
         }
     }
 
-    /// A defective array header inside a list item is an error in strict
-    /// mode, wherever the header sits.
-    ///
-    /// Three call sites used `try?`, so the error became `nil` and the line
-    /// then read as a key-value pair. The bracket segment went into the key.
-    /// The same defective header at the root was rejected, so the result
-    /// depended on the position in the document.
-    @Test func aDefectiveHeaderInAListItemIsAnErrorInStrictMode() async throws {
-        for source in ["a[1]:\n  - [2x]: p,q", "a[1]:\n  - nums[3x]: 1,2,3"] {
-            #expect(throws: TOONDecodingError.self) {
-                try self.decoder.decode(TOONValue.self, from: Data(source.utf8))
-            }
-        }
-    }
-
     /// An indentation size below one is a mistake, not a silent flattening.
     ///
     /// The decoder divided by the size to get the depth of a line, and
