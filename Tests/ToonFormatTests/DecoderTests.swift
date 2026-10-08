@@ -521,7 +521,7 @@ struct DecoderTests {
     }
 
     @Test func repeatedKeyKeepsThePositionOfItsFirstAppearance() async throws {
-        // Specification 14.3: outside strict mode the last write wins, and the
+        // Specification 14.4: outside strict mode the last write wins, and the
         // key keeps the position of its first appearance.
         let decoder = TOONDecoder()
         decoder.strict = false

@@ -502,7 +502,7 @@ private final class Parser {
         )
     }
 
-    /// Stores a sibling key, per TOON specification 14.3.
+    /// Stores a sibling key, per TOON specification 14.3 and 14.4.
     ///
     /// A repeated key is an error in strict mode. Otherwise the last write
     /// wins, and the key keeps the position of its first appearance.
@@ -1088,7 +1088,7 @@ private final class Parser {
                 cursor += 1
             }
 
-            // Specification 14.3 resolves a duplicate name by last write wins.
+            // Specification 14.4 resolves a duplicate name by last write wins.
             // The name keeps the position of its first appearance.
             values[field.name] = value
         }
