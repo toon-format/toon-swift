@@ -4,7 +4,7 @@
 # the test target. Run this script when the specification gets a new release.
 #
 #   Scripts/update-fixtures.sh            # use the pinned tag
-#   Scripts/update-fixtures.sh v4.4.0     # move to a new tag
+#   Scripts/update-fixtures.sh v4.5.0     # move to a new tag
 #
 # The script writes Tests/ToonFormatTests/Fixtures/PROVENANCE.json. Commit the
 # result. A test reads that file and compares the version against the
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 readonly SPEC_REPO="https://github.com/toon-format/spec.git"
-readonly DEFAULT_REF="v4.3.0"
+readonly DEFAULT_REF="v4.4.0"
 
 readonly REF="${1:-$DEFAULT_REF}"
 readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

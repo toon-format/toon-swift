@@ -517,7 +517,7 @@ struct DecoderTests {
     // MARK: - Specification Compliance
 
     @Test func versionDeclaration() async throws {
-        #expect(toonSpecVersion == "4.3")
+        #expect(toonSpecVersion == "4.4")
     }
 
     @Test func repeatedKeyKeepsThePositionOfItsFirstAppearance() async throws {
