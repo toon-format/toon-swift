@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/toon-format/toon-swift/actions/workflows/ci.yml/badge.svg)](https://github.com/toon-format/toon-swift/actions)
 [![Swift Version](https://img.shields.io/badge/swift-6.0+-orange.svg)](https://swift.org)
-[![SPEC v4.1](https://img.shields.io/badge/spec-v4.1-fef3c0?labelColor=1b1b1f)](https://github.com/toon-format/spec)
+[![SPEC v4.4](https://img.shields.io/badge/spec-v4.4-fef3c0?labelColor=1b1b1f)](https://github.com/toon-format/spec)
 [![License: MIT](https://img.shields.io/badge/license-MIT-fef3c0?labelColor=1b1b1f)](./LICENSE)
 
 Compact, human-readable serialization format for LLM contexts with **30-60% token reduction** vs JSON. 
@@ -51,7 +51,7 @@ see the [TOON specification](https://github.com/toon-format/spec).
 
 ### TOONEncoder
 
-`TOONEncoder` conforms to **TOON specification version 4.1** (2026-07-26)
+`TOONEncoder` conforms to **TOON specification version 4.4** (2026-10-08)
 and implements the following features:
 
 - [x] Canonical number formatting with enough precision to read back exactly
@@ -69,7 +69,7 @@ and implements the following features:
 
 ### TOONDecoder
 
-`TOONDecoder` conforms to **TOON specification version 4.1** (2026-07-26)
+`TOONDecoder` conforms to **TOON specification version 4.4** (2026-10-08)
 and implements the following features:
 
 - [x] Escape sequence parsing (`\\`, `\"`, `\n`, `\r`, `\t`, `\uXXXX`)
@@ -82,6 +82,7 @@ and implements the following features:
 - [x] Inline format for primitive arrays
 - [x] Expanded list format for nested structures
 - [x] Strict mode (default) with the full error surface of section 14
+- [x] Non-strict mode (`strict = false`) with exactly the five recoveries of section 14.4
 - [x] Key identity by Unicode scalar sequence, so two keys that differ only in normalization form stay apart
 - [x] Detailed error reporting with line numbers
 - [x] Configurable decoding limits for security
@@ -109,6 +110,13 @@ Then add the dependency to your target:
 .target(name: "YourTarget", dependencies: ["ToonFormat"])
 ```
 
+## Migrating from 0.5.x
+
+Outside strict mode the decoder now applies only the five recoveries of
+specification 14.4 and throws on every other defect, such as
+`title [draft]: Intro`, a tabular row with too few cells, or content after a
+root array.
+
 ## Migrating from 0.4.x
 
 Release 0.5.0 moves from TOON specification 3.0 to 4.1. The format changed
@@ -118,7 +126,7 @@ between those versions, so the output changes too.
 |--------|------------|
 | `encoder.indent` is renamed `encoder.indentSize` | Rename the property. The old name still works and warns. |
 | The decoder no longer guesses the indentation size | Set `decoder.indentSize` when a document does not use two spaces. |
-| `decoder.strict` is new and defaults to `true` | Set `decoder.strict = false` to accept a document that specification 14 rejects. |
+| `decoder.strict` is new and defaults to `true` | Set `decoder.strict = false` to apply the five recoveries of specification 14.4 instead of throwing. |
 | `keyFolding` and `flattenDepth` are deprecated | Specification 4.0 removed key folding. They stay off by default and go away in 2.0. |
 | `expandPaths` is deprecated and now defaults to `.disabled` | A dotted key is one literal key. To read a document written with key folding, set `.safe` and re-encode. |
 | An empty array is written `key: []`, not `key[0]:` | Nothing; both forms decode. |
@@ -126,7 +134,6 @@ between those versions, so the output changes too.
 | `indentSize` below 1 throws | Pass 1 or more. The decoder used to flatten the document, and the encoder used to stop the process. |
 | A number that a `Float` or a `UInt64` cannot hold throws | Decode into `Double` or `String` instead. The value used to become an infinity, or to lose its sign check. |
 | The line number of an error moved | A test that asserts on a line number needs new values. The number now names the line that carries the defect. |
-| Outside strict mode the decoder accepts more | A row of the wrong width and a line after the root value no longer throw, which follows specification 14. |
 
 ## Usage
 
@@ -445,7 +452,7 @@ Use `.unlimited` for trusted data only.
 Check the supported TOON specification version:
 
 ```swift
-print(toonSpecVersion) // "4.1"
+print(toonSpecVersion) // "4.4"
 ```
 
 ## Contributing
@@ -469,9 +476,9 @@ Please report unacceptable behavior to hello@johannschopplich.com.
 
 ## Project Status
 
-This library implements **TOON specification version 4.1** (2026-07-26) 
+This library implements **TOON specification version 4.4** (2026-10-08) 
 with full encoding and decoding support. 
-It satisfies all 538 conformance fixtures published by the specification.
+It satisfies all 564 conformance fixtures published by the specification.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 

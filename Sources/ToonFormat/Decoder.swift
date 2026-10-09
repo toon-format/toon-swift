@@ -2,7 +2,7 @@ import Foundation
 
 /// A decoder that converts TOON format data into Swift values.
 ///
-/// This decoder conforms to the TOON (Token-Oriented Object Notation) specification version 4.1.
+/// This decoder conforms to the TOON (Token-Oriented Object Notation) specification version 4.4.
 /// For more information, see https://github.com/toon-format/spec
 public final class TOONDecoder {
     /// The path expansion mode for dotted keys.
@@ -32,7 +32,7 @@ public final class TOONDecoder {
         message: """
             TOON specification 4.0 removed path expansion. A dotted key is one \
             literal key. The option still works, and its default is now \
-            .disabled so that the decoder follows specification 4.1. It is \
+            .disabled so that the decoder follows the specification. It is \
             removed in 2.0.
             """
     )
@@ -67,12 +67,25 @@ public final class TOONDecoder {
     /// TOON specification 13 defines this option, with a default of `true`.
     ///
     /// In strict mode a document must satisfy every rule of section 14. The
-    /// declared counts must match. A field name must not repeat. The
-    /// indentation must be exact. In non-strict mode a decoder resolves what it
-    /// can, for example a repeated key by last write wins (section 14.3).
+    /// declared counts must match. A key or a field name must not repeat. The
+    /// indentation must be exact.
     ///
-    /// Set this property to `false` to accept a document that an earlier
-    /// release accepted but section 14 rejects.
+    /// Set this property to `false` to apply the five recoveries of section
+    /// 14.4, and nothing else:
+    ///
+    /// - A declared `[N]` is advisory. The decoder reads every value, row,
+    ///   entry and item of the scope. The width of a row is still checked.
+    /// - A repeated key or field name resolves by last write wins.
+    /// - The depth of a line is its tabs plus its spaces divided by
+    ///   ``indentSize``, rounded down, counted over the whole leading run of
+    ///   spaces and tabs.
+    /// - A blank line inside the rows, entries or items of a header is
+    ///   ignored.
+    /// - A first line deeper than its scope sets the depth of that scope.
+    ///
+    /// Every other defect of section 14 is an error in both modes, among
+    /// them a malformed header, a row of the wrong width, an over-indented
+    /// line and a line after the root array.
     public var strict: Bool = true
 
     /// Limits for decoding to prevent resource exhaustion.
@@ -206,7 +219,12 @@ public final class TOONDecoder {
             throw TOONDecodingError.inputTooLarge(size: data.count, limit: limits.maxInputSize)
         }
 
-        guard let text = String(data: data, encoding: .utf8) else {
+        // String(data:encoding:) drops a leading byte-order mark, and the
+        // pre-pass drops one more, so a second mark would vanish from the
+        // content. String(decoding:as:) keeps every scalar but repairs
+        // ill-formed input, which a comparison with the bytes detects.
+        let text = String(decoding: data, as: UTF8.self)
+        guard text.utf8.elementsEqual(data) else {
             throw TOONDecodingError.invalidFormat("Data is not valid UTF-8")
         }
 
@@ -300,6 +318,11 @@ private final class Parser {
     private let limits: TOONDecoder.DecodingLimits
     private var currentLine: Int = 0
 
+    /// The depth of the elements of the outermost header whose span is open,
+    /// or `nil` outside every span. A line at this depth or deeper still
+    /// belongs to that span.
+    private var openSpanDepth: Int?
+
     init(
         text: String,
         indentSize: Int,
@@ -338,14 +361,9 @@ private final class Parser {
     /// Rejects a line that follows a root scope.
     ///
     /// Specification 5 gives a document one root value. A line left over after
-    /// the root array or the root keyed scope is trailing content.
-    ///
-    /// Specification 14.2 makes that an error in strict mode. A decoder
-    /// outside strict mode may ignore the line instead, and the reference
-    /// implementation does.
+    /// the root array or the root keyed scope is trailing content, which
+    /// specification 14.2 makes an error in both modes.
     private func rejectTrailingContentAfterRoot() throws {
-        guard strict else { return }
-
         while currentLine < lines.count {
             if !lines[currentLine].isEmpty {
                 throw TOONDecodingError.invalidFormat(
@@ -357,8 +375,17 @@ private final class Parser {
     }
 
     func parse() throws -> Value {
+        // An indented line before the first line at depth 0 belongs to no
+        // scope.
+        while let line = peekLine(), line.isEmpty || trimIndentation(line).depth > 0 {
+            if !line.isEmpty {
+                throw overIndentedLineError(expectedDepth: 0)
+            }
+            currentLine += 1
+        }
+
         // Filter out empty lines for root detection, but keep track of original positions
-        let nonEmptyLines = lines.enumerated().filter { !$0.element.isEmpty }
+        let nonEmptyLines = lines.enumerated().dropFirst(currentLine).filter { !$0.element.isEmpty }
 
         if nonEmptyLines.isEmpty {
             // Empty document = empty object
@@ -366,8 +393,7 @@ private final class Parser {
         }
 
         // Detect root form
-        let firstNonEmptyLine = nonEmptyLines[0].element
-        let firstContent = trimIndentation(firstNonEmptyLine).content
+        let firstContent = trimIndentation(nonEmptyLines[0].element).content
 
         // Specification 4 gives the literal token `[]` at the root the meaning
         // of an empty array.
@@ -377,94 +403,54 @@ private final class Parser {
 
         // Root array: first line is a valid array header WITHOUT a key (e.g., "[3]:" not "items[3]:")
         // An array header without key starts with "[" immediately
-        if firstContent.hasPrefix("["), let _ = try? parseArrayHeader(String(firstContent)) {
-            currentLine = nonEmptyLines[0].offset
-            let root = try parseArrayAtCurrentLine(depth: 0, key: nil)
+        if firstContent.unicodeScalars.first == "[", let header = try parseHeaderIfPresent(String(firstContent)) {
+            currentLine = nonEmptyLines[0].offset + 1
+            let root = try parseArrayContent(header: header, atDepth: 0)
             try rejectTrailingContentAfterRoot()
             return root
         }
 
         // Single primitive: exactly one non-empty line that's not an object key-value pair
-        // A key-value pair has a colon NOT inside quotes and NOT part of an array header
+        // A key-value pair has an unquoted colon, even one inside brackets
         if nonEmptyLines.count == 1 {
             let contentStr = String(firstContent)
-            if !isKeyValuePair(contentStr) {
+            if findUnquotedColon(in: firstContent.unicodeScalars) == nil {
                 return try parsePrimitiveValue(contentStr)
             }
         }
 
         // Default: object
-        currentLine = 0
         return try parseObject(atDepth: 0)
-    }
-
-    /// Checks if a line represents a key: value pair (as opposed to a single primitive value)
-    private func isKeyValuePair(_ content: String) -> Bool {
-        var inQuotes = false
-        var escaped = false
-        var bracketDepth = 0
-
-        for char in content {
-            if escaped {
-                escaped = false
-                continue
-            }
-
-            if char == "\\" {
-                escaped = true
-                continue
-            }
-
-            if char == "\"" {
-                inQuotes.toggle()
-                continue
-            }
-
-            if !inQuotes {
-                if char == "[" {
-                    bracketDepth += 1
-                } else if char == "]" {
-                    bracketDepth -= 1
-                } else if char == ":" && bracketDepth == 0 {
-                    return true
-                }
-            }
-        }
-
-        return false
     }
 
     // MARK: - Indentation Handling
 
     /// Splits a line into its depth and its content.
     ///
-    /// The depth uses the floor of the division. TOON specification 12 allows
-    /// that leniency for an indentation that is not a multiple of the indent
-    /// size. Strict mode rejects such a line in the pre-pass.
-    ///
-    /// Specification 12 also allows a decoder to accept a tab in the
-    /// indentation outside strict mode. It requires the depth rule for a tab to
-    /// be documented. This decoder counts one tab as one level. Strict mode
-    /// rejects a tab in the pre-pass, so a tab reaches this point only in
-    /// non-strict mode.
+    /// The depth is the number of tabs plus the number of spaces divided by
+    /// the indent size, rounded down, over the whole leading run of spaces
+    /// and tabs. That is the indentation recovery of TOON specification 14.4.
+    /// Strict mode rejects a tab or a count that is not a multiple of the
+    /// indent size in the pre-pass, so the rule only matters outside it.
     private func trimIndentation(_ line: String) -> (depth: Int, content: Substring) {
+        let scalars = line.unicodeScalars
         var spaces = 0
         var tabs = 0
-        var index = line.startIndex
+        var index = scalars.startIndex
 
-        while index < line.endIndex {
-            if line[index] == " " {
+        while index < scalars.endIndex {
+            if scalars[index] == " " {
                 spaces += 1
-            } else if line[index] == "\t" {
+            } else if scalars[index] == "\t" {
                 tabs += 1
             } else {
                 break
             }
-            index = line.index(after: index)
+            index = scalars.index(after: index)
         }
 
         let depth = (indentSize > 0 ? spaces / indentSize : 0) + tabs
-        return (depth, line[index...])
+        return (depth, Substring(scalars[index...]))
     }
 
     private func peekLine() -> String? {
@@ -479,57 +465,44 @@ private final class Parser {
         return line
     }
 
-    /// Skips the blank lines, and rejects one that sits inside a scope.
+    /// Skips the blank lines, and in strict mode rejects them inside a header span.
     ///
     /// Specification 12 forbids a blank line inside the span of a header. The
     /// span runs from the first row, entry or item of the scope. It ends at the
-    /// last line of the content of that scope. A blank line before the first
-    /// one is therefore ignorable, and so is a blank line after the last one. A
-    /// blank line is interior when the scope has already produced an element
-    /// and the next line still belongs to the scope.
-    private func skipBlankLines(insideScopeAtDepth depth: Int, hasElement: Bool) throws {
-        guard currentLine < lines.count, lines[currentLine].isEmpty else { return }
-
-        guard let nextDepth = depthOfNextContentLine() else {
-            // Only blank lines remain, so nothing encloses them.
-            while currentLine < lines.count, lines[currentLine].isEmpty {
-                currentLine += 1
-            }
-            return
-        }
-
-        // The next line is shallower, so the blank lines sit after this scope
-        // and belong to an enclosing one. Leave them for it to judge.
-        if nextDepth < depth { return }
-
+    /// last line of the content of that scope, which may sit deep inside its
+    /// last item. A blank line before the first one is therefore ignorable,
+    /// and so is a blank line after the last one.
+    ///
+    /// The check reads ``openSpanDepth`` rather than the scope at hand. A
+    /// nested scope that has no element yet, or an object inside a list item,
+    /// still sits inside the span of the enclosing header.
+    private func skipBlankLines() throws {
         let firstBlank = currentLine
         while currentLine < lines.count, lines[currentLine].isEmpty {
             currentLine += 1
         }
 
-        if strict, hasElement {
+        guard strict, currentLine > firstBlank, currentLine < lines.count,
+            let spanDepth = openSpanDepth
+        else { return }
+
+        if trimIndentation(lines[currentLine]).depth >= spanDepth {
             throw TOONDecodingError.unexpectedBlankLine(line: sourceLine(firstBlank))
         }
     }
 
-    /// The depth of the next line that is not blank, without consuming
-    /// anything. Returns `nil` at the end of the document.
-    private func depthOfNextContentLine() -> Int? {
-        var index = currentLine
-        while index < lines.count, lines[index].isEmpty {
-            index += 1
-        }
-        guard index < lines.count else { return nil }
-        return trimIndentation(lines[index]).depth
+    /// The error for the current line, which sits deeper than the content of
+    /// its scope after a line that opened no scope. Such a line belongs to no
+    /// scope (specification 8).
+    private func overIndentedLineError(expectedDepth: Int) -> TOONDecodingError {
+        let lineDepth = trimIndentation(lines[currentLine]).depth
+        return .invalidIndentation(
+            line: sourceLine(currentLine),
+            message: "Expected indentation depth \(expectedDepth), got \(lineDepth)"
+        )
     }
 
-    private func skipEmptyLines() {
-        while currentLine < lines.count, lines[currentLine].isEmpty {
-            currentLine += 1
-        }
-    }
-
-    /// Stores a sibling key, per TOON specification 14.3.
+    /// Stores a sibling key, per TOON specification 14.3 and 14.4.
     ///
     /// A repeated key is an error in strict mode. Otherwise the last write
     /// wins, and the key keeps the position of its first appearance.
@@ -554,7 +527,13 @@ private final class Parser {
 
     // MARK: - Object Parsing
 
-    private func parseObject(atDepth depth: Int) throws -> Value {
+    /// Reads the fields of an object at `depth`.
+    ///
+    /// `scopeDepth` is the depth where the scope of the object starts. It is
+    /// shallower than `depth` only when a jumped first line set the depth of
+    /// the fields outside strict mode. A line between the two depths belongs
+    /// to the scope but to no field, so it counts as over-indented.
+    private func parseObject(atDepth depth: Int, scopeDepth: Int? = nil) throws -> Value {
         // Check depth limit
         if depth > limits.maxDepth {
             throw TOONDecodingError.depthLimitExceeded(depth: depth, limit: limits.maxDepth)
@@ -565,23 +544,19 @@ private final class Parser {
         while let line = peekLine() {
             // Skip empty lines between object entries
             if line.isEmpty {
-                _ = consumeLine()
+                try skipBlankLines()
                 continue
             }
 
             let (lineDepth, content) = trimIndentation(line)
 
             // If we've decreased in depth, we're done with this object
-            if lineDepth < depth {
+            if lineDepth < scopeDepth ?? depth {
                 break
             }
 
-            // If depth doesn't match expected, error
             if lineDepth != depth {
-                throw TOONDecodingError.invalidIndentation(
-                    line: sourceLine(currentLine),
-                    message: "Expected indentation depth \(depth), got \(lineDepth)"
-                )
+                throw overIndentedLineError(expectedDepth: depth)
             }
 
             _ = consumeLine()
@@ -618,59 +593,28 @@ private final class Parser {
         // Specification 5.2 classifies the line before anything reads it. A
         // line whose first unquoted colon precedes any unquoted bracket is a
         // key-value line, never a header.
-        if isArrayHeaderLine(content) {
-            var parsedHeader: ArrayHeader?
-            do {
-                parsedHeader = try parseArrayHeader(content)
-            } catch {
-                // A malformed header is an error in strict mode. Non-strict
-                // mode may fall through to the key-value reading below.
-                if strict { throw error }
+        if let header = try parseHeaderIfPresent(content) {
+            if let key = header.key {
+                return (key, try parseArrayContent(header: header, atDepth: depth))
             }
-
-            if let header = parsedHeader, header.fields != nil,
-                hasContentAfterHeaderColon(content)
-            {
-                // Specification 6 forbids content after the colon of a header
-                // that carries a field list: its rows live on the lines below.
-                if strict {
-                    throw TOONDecodingError.invalidHeader(
-                        "Content after the colon of a header that carries a field list: \(content)"
-                    )
-                }
-                parsedHeader = nil
-            }
-
-            if let header = parsedHeader {
-                // Specification 6 allows a keyless header only at the document
-                // root and, without a field list, as a list item.
-                if header.key == nil, strict {
-                    throw TOONDecodingError.invalidHeader(
-                        "A keyless array header is not allowed in object field position: \(content)"
-                    )
-                }
-                let array = try parseArrayContent(header: header, atDepth: depth)
-                return (header.key ?? "", array)
-            }
-        }
-
-        // Check for list item starting with "- "
-        if content.hasPrefix("- ") {
-            throw TOONDecodingError.invalidFormat(
-                "Unexpected list item outside array context at line \(lastReadSourceLine)"
+            // Specification 6 allows a keyless header only at the document
+            // root and, without a field list, as a list item.
+            throw TOONDecodingError.invalidHeader(
+                "A keyless array header is not allowed in object field position: \(content)"
             )
         }
 
         // Parse as key: value
-        guard let colonIndex = findKeyValueSeparator(in: content) else {
+        let scalars = content.unicodeScalars[...]
+        guard let colonIndex = findUnquotedColon(in: scalars) else {
             throw TOONDecodingError.invalidFormat("Expected key: value at line \(lastReadSourceLine), got: \(content)")
         }
 
-        let keyPart = String(content[..<colonIndex])
+        let keyPart = String(scalars[..<colonIndex])
         let key = try parseKey(keyPart)
 
-        let afterColon = content.index(after: colonIndex)
-        let valuePart = String(content[afterColon...]).trimmingLeadingSpace()
+        let afterColon = scalars.index(after: colonIndex)
+        let valuePart = String(scalars[afterColon...]).trimmingLeadingSpace()
 
         if valuePart.isEmpty {
             // Nested object or empty value
@@ -683,49 +627,26 @@ private final class Parser {
         }
     }
 
-    private func findKeyValueSeparator(in content: String) -> String.Index? {
-        // Find the colon that separates key from value
-        // Handle quoted keys: "key:with:colons": value
-        var inQuotes = false
-        var escaped = false
-        var bracketDepth = 0
-
-        for (i, char) in content.enumerated() {
-            if escaped {
-                escaped = false
-                continue
-            }
-
-            if char == "\\" {
-                escaped = true
-                continue
-            }
-
-            if char == "\"" {
-                inQuotes.toggle()
-                continue
-            }
-
-            if !inQuotes {
-                if char == "[" {
-                    bracketDepth += 1
-                } else if char == "]" {
-                    bracketDepth -= 1
-                } else if char == ":", bracketDepth == 0 {
-                    return content.index(content.startIndex, offsetBy: i)
-                }
-            }
-        }
-
-        return nil
-    }
-
+    /// Reads a key token: the key of a key-value line, an entry key, or a
+    /// field name.
     private func parseKey(_ keyPart: String) throws -> String {
         let trimmed = keyPart.trimmingSpaces()
 
-        if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") {
-            // Quoted key
-            let inner = String(trimmed.dropFirst().dropLast())
+        // A key that begins with a quote must end at its closing quote, like
+        // a quoted value. `"a"\t` is not the key `a`.
+        let scalars = trimmed.unicodeScalars[...]
+        if scalars.first == "\"" {
+            guard let closing = findClosingQuote(in: scalars) else {
+                throw TOONDecodingError.invalidFormat(
+                    "Unterminated quoted key at line \(lastReadSourceLine)"
+                )
+            }
+            guard scalars.index(after: closing) == scalars.endIndex else {
+                throw TOONDecodingError.invalidFormat(
+                    "Characters after the closing quote of a key at line \(lastReadSourceLine)"
+                )
+            }
+            let inner = String(scalars[scalars.index(after: scalars.startIndex) ..< closing])
             return try unescapeString(inner)
         }
 
@@ -734,13 +655,13 @@ private final class Parser {
     }
 
     private func parseNestedValue(atDepth depth: Int) throws -> Value {
-        skipEmptyLines()
+        try skipBlankLines()
 
         guard let line = peekLine() else {
             return .object([:])
         }
 
-        let (lineDepth, content) = trimIndentation(line)
+        let lineDepth = trimIndentation(line).depth
 
         if lineDepth < depth {
             // No nested content - empty object
@@ -748,16 +669,15 @@ private final class Parser {
         }
 
         if lineDepth != depth {
+            // Outside strict mode the first line sets the depth of the fields,
+            // even when it jumps a level.
+            guard strict else {
+                return try parseObject(atDepth: lineDepth, scopeDepth: depth)
+            }
             throw TOONDecodingError.invalidIndentation(
                 line: sourceLine(currentLine),
                 message: "Expected indentation depth \(depth), got \(lineDepth)"
             )
-        }
-
-        // Check if it's a list item
-        if content.hasPrefix("- ") {
-            // This shouldn't happen here - arrays should be parsed via array header
-            throw TOONDecodingError.invalidFormat("Unexpected list item at line \(sourceLine(currentLine))")
         }
 
         // Parse as nested object
@@ -773,67 +693,29 @@ private final class Parser {
         let fields: [FieldNode]?
         /// The `[N:]` marker of specification 9.5.
         let isKeyed: Bool
+        /// The text after the colon that ends the header, without the space that follows the colon.
+        let inlineContent: Substring
     }
 
-    /// The position of the colon that ends an array header.
-    ///
-    /// The search skips a quoted span, the bracket segment and the field list.
-    /// Each of the three may hold a colon of its own. The keyed marker of
-    /// specification 9.5 sits inside the brackets, and a quoted field name may
-    /// carry any character.
-    private func headerColonIndex(in text: Substring) -> Substring.Index? {
-        var inQuotes = false
-        var escaped = false
-        var brackets = 0
-        var braces = 0
-        var index = text.startIndex
-
-        while index < text.endIndex {
-            let char = text[index]
-            if escaped {
-                escaped = false
-            } else if char == "\\" {
-                escaped = true
-            } else if char == "\"" {
-                inQuotes.toggle()
-            } else if !inQuotes {
-                switch char {
-                case "[": brackets += 1
-                case "]": brackets -= 1
-                case "{": braces += 1
-                case "}": braces -= 1
-                case ":" where brackets == 0 && braces == 0:
-                    return index
-                default: break
-                }
-            }
-            index = text.index(after: index)
-        }
-
-        return nil
-    }
-
-    /// Whether the header line carries content after the colon that ends it.
-    private func hasContentAfterHeaderColon(_ content: String) -> Bool {
-        guard let colonIndex = headerColonIndex(in: content[...]) else { return false }
-        return !content[content.index(after: colonIndex)...].trimmingLeadingSpace().isEmpty
-    }
-
-    /// Whether the line is an array-header line, per specification 5.2.
+    /// The first unquoted bracket of an array-header line, or `nil` when the
+    /// line is not one, per specification 5.2.
     ///
     /// The line is a header when an unquoted bracket precedes the first
-    /// unquoted colon. A bracket inside a quoted key, or after the colon, is
-    /// content.
-    private func isArrayHeaderLine(_ content: String) -> Bool {
+    /// unquoted colon. A bracket inside a quoted span, or after the colon, is
+    /// content. A line without an unquoted colon is never a header.
+    private func headerBracketIndex(_ content: String) -> String.Index? {
         var inQuotes = false
         var escaped = false
+        var bracketIndex: String.Index?
 
-        for char in content {
+        let scalars = content.unicodeScalars
+        for index in scalars.indices {
+            let char = scalars[index]
             if escaped {
                 escaped = false
                 continue
             }
-            if char == "\\" {
+            if inQuotes, char == "\\" {
                 escaped = true
                 continue
             }
@@ -842,11 +724,11 @@ private final class Parser {
                 continue
             }
             guard !inQuotes else { continue }
-            if char == "[" { return true }
-            if char == ":" { return false }
+            if char == "[", bracketIndex == nil { bracketIndex = index }
+            if char == ":" { return bracketIndex }
         }
 
-        return false
+        return nil
     }
 
     /// Parses an array header, or returns `nil` when the line is not one.
@@ -854,28 +736,16 @@ private final class Parser {
     /// Specification 5.2 classifies a line as an array header when an
     /// unquoted `[` comes before the first unquoted colon. A line of that
     /// shape that does not parse is a defect, not a key-value pair.
-    /// Specification 6 lets a decoder outside strict mode fall back to a
-    /// key-value pair, so only strict mode reports the defect.
     private func parseHeaderIfPresent(_ content: String) throws -> ArrayHeader? {
-        // A header always ends with a colon. A line such as `[1,2,3]` carries
-        // no colon, so specification 5.2 leaves it a scalar, not a defective
-        // header.
-        guard isArrayHeaderLine(content), headerColonIndex(in: content[...]) != nil else {
-            return nil
-        }
-        do {
-            return try parseArrayHeader(content)
-        } catch {
-            if strict { throw error }
-            return nil
-        }
+        guard let bracketIndex = headerBracketIndex(content) else { return nil }
+        return try parseArrayHeader(content, bracketIndex: bracketIndex)
     }
 
-    private func parseArrayHeader(_ content: String) throws -> ArrayHeader {
+    private func parseArrayHeader(_ content: String, bracketIndex: String.Index) throws -> ArrayHeader {
         // Pattern: [key][N{delimiter}]{fields}:
         // Examples: [3]:, key[2]:, items[3]{a,b,c}:, items[2|]{a|b}:
 
-        var remaining = content[...]
+        var remaining = content.unicodeScalars[...]
 
         // Extract key (optional)
         var key: String? = nil
@@ -887,13 +757,13 @@ private final class Parser {
             let quotedKey = String(remaining[remaining.index(after: remaining.startIndex) ..< endQuote])
             key = try unescapeString(quotedKey)
             remaining = remaining[remaining.index(after: endQuote)...]
-        } else if let bracketIndex = remaining.firstIndex(of: "[") {
+        } else {
             let keyPart = remaining[..<bracketIndex]
             if !keyPart.isEmpty {
                 // Specification 6 forbids whitespace between a key and its
                 // bracket segment; the token trimming of section 12 does not
                 // reach here.
-                if keyPart.last == " " || keyPart.last == "\t" {
+                if Substring(keyPart).endsWithWhitespace {
                     throw TOONDecodingError.invalidHeader(
                         "Whitespace between the key and its bracket segment: \(content)"
                     )
@@ -921,12 +791,25 @@ private final class Parser {
         // which specification 6 does not allow here.
         var countStr = ""
         while let char = remaining.first, char.isASCIIDigit {
-            countStr.append(char)
+            countStr.unicodeScalars.append(char)
             remaining = remaining.dropFirst()
         }
 
-        guard let count = Int(countStr) else {
+        guard !countStr.isEmpty else {
             throw TOONDecodingError.invalidHeader("Invalid count in array header: \(content)")
+        }
+        // A length beyond the range of Int still forms a header. Strict mode
+        // can never meet it, so it names the declared digits; outside strict
+        // mode the count is advisory.
+        let count: Int
+        if let parsed = Int(countStr) {
+            count = parsed
+        } else if strict {
+            throw TOONDecodingError.invalidHeader(
+                "Array length \(countStr) exceeds the range of Int: \(content)"
+            )
+        } else {
+            count = .max
         }
 
         // Specification 6 forbids a leading zero in the length.
@@ -1000,11 +883,12 @@ private final class Parser {
             count: count,
             delimiter: delimiter,
             fields: fields,
-            isKeyed: isKeyed
+            isKeyed: isKeyed,
+            inlineContent: Substring(remaining.dropFirst()).trimmingLeadingSpace()
         )
     }
 
-    private func findClosingQuote(in str: Substring) -> String.Index? {
+    private func findClosingQuote(in str: Substring.UnicodeScalarView) -> String.Index? {
         var escaped = false
         var index = str.index(after: str.startIndex)  // Skip opening quote
 
@@ -1025,7 +909,7 @@ private final class Parser {
 
     /// The position of the brace that closes the field list that starts after
     /// the opening brace. A brace inside a quoted name is content.
-    private func findMatchingBrace(in text: Substring) -> Substring.Index? {
+    private func findMatchingBrace(in text: Substring.UnicodeScalarView) -> String.Index? {
         var depth = 0
         var inQuotes = false
         var escaped = false
@@ -1035,7 +919,7 @@ private final class Parser {
             let char = text[index]
             if escaped {
                 escaped = false
-            } else if char == "\\" {
+            } else if inQuotes, char == "\\" {
                 escaped = true
             } else if char == "\"" {
                 inQuotes.toggle()
@@ -1080,22 +964,22 @@ private final class Parser {
         var escaped = false
         var braceDepth = 0
 
-        for char in fieldsStr {
+        for char in fieldsStr.unicodeScalars {
             if escaped {
-                current.append(char)
+                current.unicodeScalars.append(char)
                 escaped = false
                 continue
             }
 
-            if char == "\\" {
+            if inQuotes, char == "\\" {
                 escaped = true
-                current.append(char)
+                current.unicodeScalars.append(char)
                 continue
             }
 
             if char == "\"" {
                 inQuotes.toggle()
-                current.append(char)
+                current.unicodeScalars.append(char)
                 continue
             }
 
@@ -1116,9 +1000,15 @@ private final class Parser {
                     current = ""
                     continue
                 }
+
+                if char == "," || char == "|" || char == "\t", String(char) != delimiter {
+                    throw TOONDecodingError.invalidHeader(
+                        "The field list uses a delimiter other than its bracket segment: \(fieldsStr)"
+                    )
+                }
             }
 
-            current.append(char)
+            current.unicodeScalars.append(char)
         }
 
         guard braceDepth == 0 else {
@@ -1127,9 +1017,7 @@ private final class Parser {
             )
         }
 
-        if !current.isEmpty {
-            try fields.append(parseField(current, delimiter: delimiter, depth: depth))
-        }
+        try fields.append(parseField(current, delimiter: delimiter, depth: depth))
 
         return fields
     }
@@ -1138,29 +1026,41 @@ private final class Parser {
     private func parseField(_ field: String, delimiter: String, depth: Int) throws -> FieldNode {
         let trimmed = field.trimmingSpaces()
 
-        guard let braceIndex = indexOfGroupBrace(in: trimmed) else {
-            return FieldNode(name: try parseFieldName(trimmed))
+        let scalars = trimmed.unicodeScalars[...]
+        guard let braceIndex = indexOfGroupBrace(in: scalars) else {
+            guard !trimmed.isEmpty else {
+                throw TOONDecodingError.invalidHeader("Empty field entry in the field list")
+            }
+            return FieldNode(name: try parseKey(trimmed))
         }
 
-        guard trimmed.hasSuffix("}") else {
+        guard scalars.last == "}" else {
             throw TOONDecodingError.invalidHeader("Unterminated field group in: \(field)")
         }
 
-        let name = String(trimmed[..<braceIndex])
-        let innerStart = trimmed.index(after: braceIndex)
-        let inner = String(trimmed[innerStart ..< trimmed.index(before: trimmed.endIndex)])
-
-        let children = try parseFieldsList(inner, delimiter: delimiter, depth: depth + 1)
-        guard !children.isEmpty else {
-            throw TOONDecodingError.invalidHeader("Empty field group in: \(field)")
+        let name = String(scalars[..<braceIndex])
+        guard !name.isEmpty else {
+            throw TOONDecodingError.invalidHeader("A nested field group without a name: \(field)")
+        }
+        // Token trimming stops short of a nested group, so whitespace before
+        // its brace is a defect, not padding.
+        if name.endsWithWhitespace {
+            throw TOONDecodingError.invalidHeader(
+                "Whitespace between a field name and its nested field group: \(field)"
+            )
         }
 
-        return FieldNode(name: try parseFieldName(name), children: children)
+        let innerStart = scalars.index(after: braceIndex)
+        let inner = String(scalars[innerStart ..< scalars.index(before: scalars.endIndex)])
+
+        let children = try parseFieldsList(inner, delimiter: delimiter, depth: depth + 1)
+
+        return FieldNode(name: try parseKey(name), children: children)
     }
 
     /// The position of the brace that opens a nested group, skipping a brace
     /// that sits inside a quoted name.
-    private func indexOfGroupBrace(in field: String) -> String.Index? {
+    private func indexOfGroupBrace(in field: Substring.UnicodeScalarView) -> String.Index? {
         var inQuotes = false
         var escaped = false
         var index = field.startIndex
@@ -1169,7 +1069,7 @@ private final class Parser {
             let char = field[index]
             if escaped {
                 escaped = false
-            } else if char == "\\" {
+            } else if inQuotes, char == "\\" {
                 escaped = true
             } else if char == "\"" {
                 inQuotes.toggle()
@@ -1182,40 +1082,23 @@ private final class Parser {
         return nil
     }
 
-    private func parseFieldName(_ field: String) throws -> String {
-        let trimmed = field.trimmingSpaces()
-        if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") {
-            let inner = String(trimmed.dropFirst().dropLast())
-            return try unescapeString(inner)
-        }
-        return trimmed
-    }
-
     /// Builds one row object by walking the field tree against the cells.
     ///
     /// Specification 9.3 maps the cells to the leaves in depth-first order.
-    /// Specification 14.1 gives two rules for non-strict mode. A leaf with no
-    /// remaining cell is absent from the object, and is not null. A surplus
-    /// cell contributes nothing.
+    /// The callers check the width first, so every leaf has its cell.
     private func materializeRow(fields: [FieldNode], cells: [Value], cursor: inout Int) -> Value {
         var values: ObjectStorage = [:]
 
         for field in fields {
             let value: Value
             if let children = field.children {
-                let before = cursor
-                let nested = materializeRow(fields: children, cells: cells, cursor: &cursor)
-                if cursor == before, case let .object(inner) = nested, inner.isEmpty {
-                    continue
-                }
-                value = nested
+                value = materializeRow(fields: children, cells: cells, cursor: &cursor)
             } else {
-                guard cursor < cells.count else { continue }
                 value = cells[cursor]
                 cursor += 1
             }
 
-            // Specification 14.3 resolves a duplicate name by last write wins.
+            // Specification 14.4 resolves a duplicate name by last write wins.
             // The name keeps the position of its first appearance.
             values[field.name] = value
         }
@@ -1223,25 +1106,18 @@ private final class Parser {
         return .object(values)
     }
 
-    private func parseArrayAtCurrentLine(depth: Int, key _: String?) throws -> Value {
-        guard let line = consumeLine() else {
-            throw TOONDecodingError.invalidFormat("Expected array header")
+    /// Bounds the elements an array actually holds. The declared length is
+    /// no bound: it never terminates a scope (specification 14.1).
+    private func checkArrayLength(_ length: Int) throws {
+        if length > limits.maxArrayLength {
+            throw TOONDecodingError.arrayLengthLimitExceeded(length: length, limit: limits.maxArrayLength)
         }
-
-        let (_, content) = trimIndentation(line)
-        let header = try parseArrayHeader(String(content))
-        return try parseArrayContent(header: header, atDepth: depth)
     }
 
     private func parseArrayContent(header: ArrayHeader, atDepth depth: Int) throws -> Value {
-        // Check array length limit
-        if header.count > limits.maxArrayLength {
-            throw TOONDecodingError.arrayLengthLimitExceeded(length: header.count, limit: limits.maxArrayLength)
-        }
-
         // Specification 6 forbids content after the colon of a header that
         // carries a field list: the rows live on the lines below it.
-        if strict, header.fields != nil, headerCarriesInlineContent() {
+        if header.fields != nil, !header.inlineContent.isEmpty {
             throw TOONDecodingError.invalidHeader(
                 "Content after the colon of a header that carries a field list, at line "
                     + "\(sourceLine(currentLine - 1))"
@@ -1253,38 +1129,21 @@ private final class Parser {
             return try parseKeyedEntryRows(header: header, atDepth: depth)
         }
 
-        // Check for inline values after header
-        // For example: tags[3]: a,b,c
-
-        // Re-parse to get the full line with potential inline values
-        let headerLine = lines[currentLine - 1]
-        let (_, content) = trimIndentation(headerLine)
-        let contentStr = String(content)
-
-        // Find where the header ends (after the colon)
-        if let colonIndex = headerColonIndex(in: contentStr[...]) {
-            let afterColon = contentStr[contentStr.index(after: colonIndex)...]
-            let inlineValues = afterColon.trimmingLeadingSpace()
-
-            if !inlineValues.isEmpty {
-                // Inline primitive array
-                let values = try parseDelimitedValues(String(inlineValues), delimiter: header.delimiter)
-                if values.count != header.count {
-                    throw TOONDecodingError.countMismatch(
-                        expected: header.count,
-                        actual: values.count,
-                        line: lastReadSourceLine
-                    )
-                }
-                return .array(values)
+        // Inline primitive array, for example `tags[3]: a,b,c`
+        if !header.inlineContent.isEmpty {
+            let values = try parseDelimitedValues(String(header.inlineContent), delimiter: header.delimiter)
+            try checkArrayLength(values.count)
+            if strict, values.count != header.count {
+                throw TOONDecodingError.countMismatch(
+                    expected: header.count,
+                    actual: values.count,
+                    line: lastReadSourceLine
+                )
             }
+            return .array(values)
         }
 
         // No inline values - parse expanded content
-        if header.count == 0 {
-            return .array([])
-        }
-
         var items: [Value] = []
 
         if let fields = header.fields {
@@ -1305,16 +1164,6 @@ private final class Parser {
         return .array(items)
     }
 
-    /// Whether the header line that was just consumed carries content after
-    /// its final colon.
-    private func headerCarriesInlineContent() -> Bool {
-        guard currentLine > 0, currentLine - 1 < lines.count else { return false }
-        let (_, content) = trimIndentation(lines[currentLine - 1])
-        guard let colonIndex = headerColonIndex(in: content) else { return false }
-        let afterColon = content[content.index(after: colonIndex)...]
-        return !afterColon.trimmingLeadingSpace().isEmpty
-    }
-
     /// Reads the entry rows of a keyed tabular scope (specification 9.5).
     ///
     /// Each row splits in two steps. First at its first unquoted colon: the
@@ -1330,44 +1179,54 @@ private final class Parser {
         }
 
         var values: ObjectStorage = [:]
-        let expectedDepth = depth + 1
+        var expectedDepth = depth + 1
+        let enclosingSpanDepth = openSpanDepth
+        defer { openSpanDepth = enclosingSpanDepth }
         let width = fields.leafCount
 
         // Specification 14.1 states that a declared length never terminates or
         // truncates a scope. The loop therefore reads to the end of the scope,
         // then checks the length.
         while true {
-            try skipBlankLines(insideScopeAtDepth: expectedDepth, hasElement: !values.isEmpty)
+            try skipBlankLines()
 
             guard let line = peekLine(), !line.isEmpty else { break }
 
             let (lineDepth, content) = trimIndentation(line)
-            if lineDepth != expectedDepth {
+            if lineDepth <= depth {
                 break
             }
 
-            _ = consumeLine()
-
-            // Specification 9.5: a line at entry depth without an unquoted
-            // colon is an error in strict mode, and may be skipped otherwise.
-            guard let colonIndex = findUnquotedColon(in: content) else {
-                if strict {
-                    throw TOONDecodingError.invalidFormat(
-                        "An entry row of a keyed scope needs a colon, at line "
-                            + "\(lastReadSourceLine)"
-                    )
-                }
-                continue
+            // Outside strict mode the first line sets the depth of the scope,
+            // even when it jumps a level.
+            if !strict, values.isEmpty {
+                expectedDepth = lineDepth
             }
 
-            let entryKey = try parseFieldName(String(content[..<colonIndex]))
-            let rest = content[content.index(after: colonIndex)...].trimmingLeadingSpace()
+            if lineDepth != expectedDepth {
+                throw overIndentedLineError(expectedDepth: expectedDepth)
+            }
+
+            _ = consumeLine()
+            openSpanDepth = openSpanDepth ?? depth + 1
+
+            // Specification 9.5: a line at entry depth without an unquoted
+            // colon is an error.
+            let scalars = content.unicodeScalars
+            guard let colonIndex = findUnquotedColon(in: scalars) else {
+                throw TOONDecodingError.invalidFormat(
+                    "An entry row of a keyed scope needs a colon, at line "
+                        + "\(lastReadSourceLine)"
+                )
+            }
+
+            let entryKey = try parseKey(String(scalars[..<colonIndex]))
+            let rest = Substring(scalars[scalars.index(after: colonIndex)...]).trimmingLeadingSpace()
             let cells = try parseDelimitedValues(String(rest), delimiter: header.delimiter)
 
-            // Specification 14.1 makes a width mismatch an error in strict
-            // mode only. Outside strict mode ``materializeRow`` keeps a leaf
-            // with no cell absent, and drops a surplus cell.
-            if cells.count != width, strict {
+            // Specification 14.1 makes a width mismatch an error in both
+            // modes.
+            if cells.count != width {
                 throw TOONDecodingError.fieldCountMismatch(
                     expected: width,
                     actual: cells.count,
@@ -1379,6 +1238,7 @@ private final class Parser {
             let entry = materializeRow(fields: fields, cells: cells, cursor: &cursor)
 
             try storeKey(entryKey, value: entry, into: &values)
+            try checkArrayLength(values.count)
         }
 
         if strict, values.count != header.count {
@@ -1393,7 +1253,17 @@ private final class Parser {
     }
 
     /// The position of the first colon that sits outside a quoted span.
-    private func findUnquotedColon(in text: Substring) -> Substring.Index? {
+    private func findUnquotedColon(in text: Substring.UnicodeScalarView) -> String.Index? {
+        findUnquoted(":", in: text)
+    }
+
+    /// The position of the first occurrence of `target` outside a quoted span.
+    ///
+    /// This scan and the other scans of the parser run over Unicode scalars.
+    /// Specification 1.2 matches a syntax character as one scalar, while a
+    /// Swift `Character` joins a combining mark to the colon or delimiter
+    /// before it.
+    private func findUnquoted(_ target: Unicode.Scalar, in text: Substring.UnicodeScalarView) -> String.Index? {
         var inQuotes = false
         var escaped = false
         var index = text.startIndex
@@ -1402,11 +1272,11 @@ private final class Parser {
             let char = text[index]
             if escaped {
                 escaped = false
-            } else if char == "\\" {
+            } else if inQuotes, char == "\\" {
                 escaped = true
             } else if char == "\"" {
                 inQuotes.toggle()
-            } else if char == ":", !inQuotes {
+            } else if char == target, !inQuotes {
                 return index
             }
             index = text.index(after: index)
@@ -1422,40 +1292,54 @@ private final class Parser {
         atDepth depth: Int
     ) throws -> [Value] {
         var rows: [Value] = []
-        let expectedDepth = depth + 1
+        var expectedDepth = depth + 1
+        let enclosingSpanDepth = openSpanDepth
+        defer { openSpanDepth = enclosingSpanDepth }
 
         // Specification 14.1 states that a declared length never terminates or
         // truncates a scope. The scope ends where the depth decreases, and the
         // length is a check afterwards.
         while true {
-            try skipBlankLines(insideScopeAtDepth: expectedDepth, hasElement: !rows.isEmpty)
+            try skipBlankLines()
 
             guard let line = peekLine(), !line.isEmpty else { break }
 
             let (lineDepth, content) = trimIndentation(line)
 
-            if lineDepth < expectedDepth {
+            if lineDepth <= depth {
                 break
             }
 
-            if lineDepth > expectedDepth {
-                throw TOONDecodingError.invalidIndentation(
-                    line: sourceLine(currentLine),
-                    message: "Expected indentation depth \(expectedDepth), got \(lineDepth)"
-                )
+            // Outside strict mode the first line sets the depth of the scope,
+            // even when it jumps a level.
+            if !strict, rows.isEmpty {
+                expectedDepth = lineDepth
+            }
+
+            if lineDepth != expectedDepth {
+                throw overIndentedLineError(expectedDepth: expectedDepth)
+            }
+
+            // A line whose first unquoted colon comes before its first
+            // unquoted delimiter is a key-value line, which ends the rows.
+            if let colon = findUnquotedColon(in: content.unicodeScalars) {
+                let separator = findUnquoted(Unicode.Scalar(delimiter)!, in: content.unicodeScalars)
+                if separator.map({ colon < $0 }) ?? true {
+                    break
+                }
             }
 
             _ = consumeLine()
+            openSpanDepth = openSpanDepth ?? depth + 1
 
             let cells = try parseDelimitedValues(String(content), delimiter: delimiter)
 
             // The width of a row is the number of leaves, not the number of
             // entries of the field list: a nested group spans several cells.
             let width = fields.leafCount
-            // Specification 14.1 makes a width mismatch an error in strict
-            // mode only. Outside strict mode ``materializeRow`` keeps a leaf
-            // with no cell absent, and drops a surplus cell.
-            if cells.count != width, strict {
+            // Specification 14.1 makes a width mismatch an error in both
+            // modes.
+            if cells.count != width {
                 throw TOONDecodingError.fieldCountMismatch(
                     expected: width,
                     actual: cells.count,
@@ -1464,6 +1348,7 @@ private final class Parser {
             }
 
             var cursor = 0
+            try checkArrayLength(rows.count + 1)
             rows.append(materializeRow(fields: fields, cells: cells, cursor: &cursor))
         }
 
@@ -1480,37 +1365,47 @@ private final class Parser {
 
     private func parseListItems(count: Int, delimiter: String, atDepth depth: Int) throws -> [Value] {
         var items: [Value] = []
-        let expectedDepth = depth + 1
+        var expectedDepth = depth + 1
+        let enclosingSpanDepth = openSpanDepth
+        defer { openSpanDepth = enclosingSpanDepth }
 
         // Specification 14.1 states that a declared length never terminates or
         // truncates a scope. The loop therefore reads to the end of the scope,
         // then checks the length.
         while true {
-            try skipBlankLines(insideScopeAtDepth: expectedDepth, hasElement: !items.isEmpty)
+            try skipBlankLines()
 
             guard let line = peekLine(), !line.isEmpty else { break }
 
             let (lineDepth, content) = trimIndentation(line)
 
-            if lineDepth < expectedDepth {
+            if lineDepth <= depth {
                 break
             }
 
-            if lineDepth > expectedDepth {
-                throw TOONDecodingError.invalidIndentation(
-                    line: sourceLine(currentLine),
-                    message: "Expected indentation depth \(expectedDepth), got \(lineDepth)"
-                )
+            // Outside strict mode the first line sets the depth of the scope,
+            // even when it jumps a level.
+            if !strict, items.isEmpty {
+                expectedDepth = lineDepth
+            }
+
+            if lineDepth != expectedDepth {
+                throw overIndentedLineError(expectedDepth: expectedDepth)
             }
 
             // A line of the scope that is not a list item ends it. The bare
             // marker of section 9.4 is a hyphen with nothing after it.
-            guard content.hasPrefix("- ") || content == "-" else { break }
+            let scalars = content.unicodeScalars
+            guard scalars.starts(with: "- ".unicodeScalars) || content == "-" else { break }
 
             _ = consumeLine()
+            openSpanDepth = openSpanDepth ?? depth + 1
 
-            let itemContent = content.hasPrefix("- ") ? String(content.dropFirst(2)) : ""
+            // Specification 5.2: the hyphen may carry several spaces, and the
+            // item starts after all of them, so `-   [2]: x` is a keyless header.
+            let itemContent = String(scalars.dropFirst().drop { $0 == " " })
             let item = try parseListItemContent(itemContent, atDepth: expectedDepth, delimiter: delimiter)
+            try checkArrayLength(items.count + 1)
             items.append(item)
         }
 
@@ -1540,10 +1435,11 @@ private final class Parser {
 
         // Check for array header WITHOUT key: - [N]: a,b,c
         // This returns a bare array, not an object with an array field
-        if content.hasPrefix("["), let header = try parseHeaderIfPresent(content) {
-            // Specification 6 allows a keyless header as a list item only
-            // without a field list.
-            if header.fields != nil, strict {
+        // Specification 6 allows a keyless header as a list item only without
+        // a field list.
+        let header = try parseHeaderIfPresent(content)
+        if let header, header.key == nil {
+            guard header.fields == nil else {
                 throw TOONDecodingError.invalidHeader(
                     "A keyless header that carries a field list is not allowed as a list item: "
                         + content
@@ -1553,68 +1449,44 @@ private final class Parser {
         }
 
         // Check for key: value on same line (may be key[N]: values for array)
-        if let colonIndex = findKeyValueSeparator(in: content) {
-            let keyPart = String(content[..<colonIndex])
-            let key = try parseKey(keyPart)
-
-            let afterColon = content.index(after: colonIndex)
-            let valuePart = String(content[afterColon...]).trimmingLeadingSpace()
-
+        let scalars = content.unicodeScalars[...]
+        if let colonIndex = findUnquotedColon(in: scalars) {
             var objectValues: ObjectStorage = [:]
 
-            if valuePart.isEmpty {
-                // A header on the hyphen line describes the first field of the
-                // list-item object. That field sits one level below the hyphen
-                // line, so its rows sit two levels below it (specification 10).
-                if let header = try parseHeaderIfPresent(content),
-                    let headerKey = header.key
-                {
-                    objectValues[headerKey] = try parseArrayContent(
-                        header: header,
-                        atDepth: depth + 1
-                    )
-                } else {
+            // A header on the hyphen line describes the first field of the
+            // list-item object. That field sits one level below the hyphen
+            // line, so its rows sit two levels below it (specification 10).
+            if let header, let headerKey = header.key {
+                objectValues[headerKey] = try parseArrayContent(header: header, atDepth: depth + 1)
+            } else {
+                let key = try parseKey(String(scalars[..<colonIndex]))
+                let valuePart = String(scalars[scalars.index(after: colonIndex)...]).trimmingLeadingSpace()
+
+                if valuePart.isEmpty {
                     // The first field sits one level below the hyphen line, so
                     // its own content sits two levels below it (section 10).
-                    let nestedValue = try parseNestedValue(atDepth: depth + 2)
-                    objectValues[key] = nestedValue
-                }
-            } else {
-                // Check if the key is an array header (like nums[3])
-                // The full string would be "nums[3]: 1,2,3"
-                if let header = try parseHeaderIfPresent(content) {
-                    // Parse as array with the key
-                    let array = try parseArrayContent(header: header, atDepth: depth)
-                    let arrayKey = header.key ?? key
-                    objectValues[arrayKey] = array
+                    objectValues[key] = try parseNestedValue(atDepth: depth + 2)
                 } else {
                     // Inline primitive value
                     objectValues[key] = try parseValueInValuePosition(valuePart)
                 }
             }
 
-            // Parse additional fields at depth + 1. The fields of a list-item
-            // object are the content of its scope, so a blank line among them
-            // is interior and section 12 rejects it.
+            // Parse additional fields at depth + 1.
             while let nextLine = peekLine() {
                 if nextLine.isEmpty {
-                    // Leave the blank lines for the enclosing scope when they
-                    // end this item, so that the list itself judges them.
-                    guard let nextDepth = depthOfNextContentLine(), nextDepth >= depth + 1
-                    else { break }
-                    try skipBlankLines(insideScopeAtDepth: depth + 1, hasElement: true)
+                    try skipBlankLines()
                     continue
                 }
 
                 let (nextDepth, nextContent) = trimIndentation(nextLine)
 
-                if nextDepth != depth + 1 {
+                if nextDepth < depth + 1 {
                     break
                 }
 
-                // Check if it's another list item (shouldn't be at this depth)
-                if nextContent.hasPrefix("- ") {
-                    break
+                if nextDepth > depth + 1 {
+                    throw overIndentedLineError(expectedDepth: depth + 1)
                 }
 
                 _ = consumeLine()
@@ -1638,22 +1510,22 @@ private final class Parser {
         var inQuotes = false
         var escaped = false
 
-        for char in content {
+        for char in content.unicodeScalars {
             if escaped {
-                current.append(char)
+                current.unicodeScalars.append(char)
                 escaped = false
                 continue
             }
 
-            if char == "\\" {
+            if inQuotes, char == "\\" {
                 escaped = true
-                current.append(char)
+                current.unicodeScalars.append(char)
                 continue
             }
 
             if char == "\"" {
                 inQuotes.toggle()
-                current.append(char)
+                current.unicodeScalars.append(char)
                 continue
             }
 
@@ -1663,7 +1535,7 @@ private final class Parser {
                 continue
             }
 
-            current.append(char)
+            current.unicodeScalars.append(char)
         }
 
         // Handle last value
@@ -1701,18 +1573,19 @@ private final class Parser {
         // with a quote must end at its closing quote. The rule holds in both
         // modes. A missing quote is an error, and so is any character after the
         // closing one.
-        if trimmed.hasPrefix("\"") {
-            guard let closing = findClosingQuote(in: trimmed[...]) else {
+        let scalars = trimmed.unicodeScalars[...]
+        if scalars.first == "\"" {
+            guard let closing = findClosingQuote(in: scalars) else {
                 throw TOONDecodingError.invalidFormat(
                     "Unterminated quoted value at line \(lastReadSourceLine)"
                 )
             }
-            guard trimmed.index(after: closing) == trimmed.endIndex else {
+            guard scalars.index(after: closing) == scalars.endIndex else {
                 throw TOONDecodingError.invalidFormat(
                     "Characters after the closing quote at line \(lastReadSourceLine)"
                 )
             }
-            let inner = String(trimmed[trimmed.index(after: trimmed.startIndex) ..< closing])
+            let inner = String(scalars[scalars.index(after: scalars.startIndex) ..< closing])
             return try .string(unescapeString(inner))
         }
 
@@ -2522,8 +2395,8 @@ private func decodeUInt64(from value: Value) throws -> UInt64 {
 
 private extension String {
     func trimmingLeadingSpace() -> String {
-        guard let first = first, first == " " else { return self }
-        return String(dropFirst())
+        guard unicodeScalars.first == " " else { return self }
+        return String(unicodeScalars.dropFirst())
     }
 
     var isValidDottedPath: Bool {
@@ -2536,8 +2409,8 @@ private extension String {
 
 private extension Substring {
     func trimmingLeadingSpace() -> Substring {
-        guard let first = first, first == " " else { return self }
-        return dropFirst()
+        guard unicodeScalars.first == " " else { return self }
+        return Substring(unicodeScalars.dropFirst())
     }
 
     var isValidIdentifier: Bool {
@@ -2564,11 +2437,13 @@ extension StringProtocol {
         }
         return String(String.UnicodeScalarView(scalars))
     }
-}
 
-extension Character {
-    /// `true` for U+0030 to U+0039 only.
-    fileprivate var isASCIIDigit: Bool { self >= "0" && self <= "9" }
+    /// Whether the text ends in SP or HTAB, the only whitespace of TOON
+    /// specification 1.2. `Character.isWhitespace` also matches a no-break
+    /// space, which is content.
+    fileprivate var endsWithWhitespace: Bool {
+        unicodeScalars.last == " " || unicodeScalars.last == "\t"
+    }
 }
 
 extension Unicode.Scalar {

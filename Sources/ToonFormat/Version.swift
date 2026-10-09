@@ -1,2 +1,2 @@
 /// The TOON specification version supported by this library.
-public let toonSpecVersion = "4.1"
+public let toonSpecVersion = "4.4"

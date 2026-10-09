@@ -2,7 +2,7 @@ import Foundation
 
 /// An encoder that converts Swift values into TOON format.
 ///
-/// This encoder conforms to the TOON (Token-Oriented Object Notation) specification version 4.1.
+/// This encoder conforms to the TOON (Token-Oriented Object Notation) specification version 4.4.
 /// For more information, see https://github.com/toon-format/spec
 public final class TOONEncoder {
     /// The number of spaces of one indentation level.
@@ -114,7 +114,7 @@ public final class TOONEncoder {
         message: """
             TOON specification 4.0 removed key folding. The option still \
             works, and stays off by default, but its output does not conform \
-            to specification 4.1. It is removed in 2.0.
+            to the specification. It is removed in 2.0.
             """
     )
     public var keyFolding: KeyFolding {
@@ -245,7 +245,12 @@ public final class TOONEncoder {
         case .null, .bool, .int, .double, .string, .date, .url, .data:
             // Special case for root-level primitives
             if depth == 0 {
-                if let encoded = encodePrimitive(value, delimiter: delimiter.rawValue, inObject: false) {
+                // A decoder strips a U+FEFF at the start of the document as a
+                // byte-order mark, so only a root string quotes a leading one
+                // (specification 7.2).
+                if case .string(let stringValue) = value, stringValue.unicodeScalars.first == "\u{FEFF}" {
+                    write(depth: depth, content: "\"\(stringValue.escaped)\"", to: &output)
+                } else if let encoded = encodePrimitive(value, delimiter: delimiter.rawValue, inObject: false) {
                     write(depth: depth, content: encoded, to: &output)
                 }
             }
@@ -489,11 +494,12 @@ public final class TOONEncoder {
                     )
                     writeTabularRows(rows: array, header: header, output: &output, depth: depth + 2)
                 } else {
-                    write(
-                        depth: depth,
-                        content: "- \(encodedKey)[\(array.count)]:",
-                        to: &output
+                    let headerStr = formatHeader(
+                        length: array.count,
+                        key: firstKey,
+                        delimiter: delimiter.rawValue
                     )
+                    write(depth: depth, content: "- \(headerStr)", to: &output)
                     for item in array {
                         if let values = item.objectValue {
                             encodeObjectAsListItem(
@@ -505,11 +511,12 @@ public final class TOONEncoder {
                     }
                 }
             } else {
-                write(
-                    depth: depth,
-                    content: "- \(encodedKey)[\(array.count)]:",
-                    to: &output
+                let headerStr = formatHeader(
+                    length: array.count,
+                    key: firstKey,
+                    delimiter: delimiter.rawValue
                 )
+                write(depth: depth, content: "- \(headerStr)", to: &output)
                 for item in array {
                     switch item {
                     case .null, .bool, .int, .double, .string, .date, .url, .data:
@@ -695,7 +702,8 @@ public final class TOONEncoder {
             return
         }
 
-        write(depth: depth, content: "- [\(array.count)]:", to: &output)
+        let header = formatHeader(length: array.count, delimiter: delimiter.rawValue)
+        write(depth: depth, content: "- \(header)", to: &output)
         for item in array {
             switch item {
             case .null, .bool, .int, .double, .string, .date, .url, .data:
@@ -1740,37 +1748,53 @@ extension TOONEncoder {
 /// Renders a finite `Double` in the canonical decimal form of TOON
 /// specification 2.
 ///
-/// The description of a `Double` in Swift is the shortest text that reads back
-/// as the same value. Section 2 asks for exactly that: an encoder must emit
-/// enough precision that decoding its output returns the input. The earlier
-/// code used a NumberFormatter capped at 15 fraction digits. That cap rounded
-/// 0.3333333333333333 to fifteen threes, and turned 1e-16 into 0.
+/// The description of a `Double` in Swift carries the fewest digits that read
+/// back as the same value, and of those the closest to it. Section 2 asks for
+/// exactly those digits.
 ///
 /// Swift writes a whole value as "1.0" and uses an exponent outside a range of
-/// its own, so the two cases are adjusted here. Section 2 asks for a plain
+/// its own, so the decimal point is moved here. Section 2 asks for a plain
 /// decimal inside one band of magnitudes. The band holds zero, and every
 /// magnitude from 1e-6 up to 1e21. Outside it, the exponent form is allowed.
 private func canonicalDecimal(_ value: Double) -> String {
     let magnitude = abs(value)
     let usesPlainForm = magnitude == 0 || (magnitude >= 1e-6 && magnitude < 1e21)
+    let text = String(value)
 
     guard usesPlainForm else {
-        // Outside the band, section 2 allows the exponent form. The description
-        // of a Double is already the shortest text that reads back as the same
-        // value.
-        return String(value)
+        return text
     }
 
-    // The shortest fixed-point text that reads back as the same value. Trying
-    // the digits in order means the result never carries a trailing zero.
-    for digits in 0 ... 25 {
-        let text = String(format: "%.\(digits)f", value)
-        if Double(text) == value {
-            return text
-        }
+    // A fixed-point rendering is no substitute: it prints every digit of the
+    // binary value, so 1.2345678901234568e20 would come out as
+    // 123456789012345683968.
+    let parts = text.drop { $0 == "-" }.split(separator: "e")
+    let exponent = parts.dropFirst().first.flatMap { Int($0) } ?? 0
+    let mantissa = parts[0].split(separator: ".", omittingEmptySubsequences: false)
+    let integerDigits = mantissa[0]
+    let fractionDigits = mantissa.count > 1 ? mantissa[1] : ""
+
+    var digits = Substring(integerDigits + fractionDigits)
+    var point = integerDigits.count + exponent
+    while digits.first == "0" {
+        digits = digits.dropFirst()
+        point -= 1
+    }
+    while digits.last == "0" {
+        digits = digits.dropLast()
     }
 
-    return String(value)
+    guard !digits.isEmpty else { return "0" }
+
+    let sign = value < 0 ? "-" : ""
+    if point <= 0 {
+        return sign + "0." + String(repeating: "0", count: -point) + digits
+    }
+    if point >= digits.count {
+        return sign + digits + String(repeating: "0", count: point - digits.count)
+    }
+    let split = digits.index(digits.startIndex, offsetBy: point)
+    return sign + digits[..<split] + "." + digits[split...]
 }
 
 // MARK: - String Extensions
@@ -1887,21 +1911,16 @@ private extension String {
             }
         }
 
-        if contains(delimiter) {
+        // A scalar test, because specification 1.2 matches a syntax character
+        // as one scalar, and a Character test misses a delimiter, hyphen, or
+        // number sign that a combining mark follows.
+        if unicodeScalars.contains(where: { String($0) == delimiter }) {
             return false
         }
 
         // A hyphen at position 0 reads as the list marker, and a number sign
         // at position 0 reads as a comment line (section 5.1).
-        if hasPrefix("-") || hasPrefix("#") {
-            return false
-        }
-
-        // Stricter than the specification, which obliges only a decoder to
-        // strip a leading byte-order mark (section 12). Without this, a root
-        // string that starts with U+FEFF loses its first character on a round
-        // trip. Reported upstream as toon-format/toon issue 339.
-        if unicodeScalars.first == "\u{FEFF}" {
+        if unicodeScalars.first == "-" || unicodeScalars.first == "#" {
             return false
         }
 
