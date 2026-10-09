@@ -119,7 +119,7 @@ between those versions, so the output changes too.
 |--------|------------|
 | `encoder.indent` is renamed `encoder.indentSize` | Rename the property. The old name still works and warns. |
 | The decoder no longer guesses the indentation size | Set `decoder.indentSize` when a document does not use two spaces. |
-| `decoder.strict` is new and defaults to `true` | Set `decoder.strict = false` to accept a document that specification 14 rejects. |
+| `decoder.strict` is new and defaults to `true` | Set `decoder.strict = false` to apply the five recoveries of specification 14.4 instead of throwing. |
 | `keyFolding` and `flattenDepth` are deprecated | Specification 4.0 removed key folding. They stay off by default and go away in 2.0. |
 | `expandPaths` is deprecated and now defaults to `.disabled` | A dotted key is one literal key. To read a document written with key folding, set `.safe` and re-encode. |
 | An empty array is written `key: []`, not `key[0]:` | Nothing; both forms decode. |
