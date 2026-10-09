@@ -1029,7 +1029,7 @@ private final class Parser {
         let scalars = trimmed.unicodeScalars[...]
         guard let braceIndex = indexOfGroupBrace(in: scalars) else {
             guard !trimmed.isEmpty else {
-                throw TOONDecodingError.invalidHeader("Empty field entry in the field list: \(field)")
+                throw TOONDecodingError.invalidHeader("Empty field entry in the field list")
             }
             return FieldNode(name: try parseKey(trimmed))
         }
