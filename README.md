@@ -110,6 +110,13 @@ Then add the dependency to your target:
 .target(name: "YourTarget", dependencies: ["ToonFormat"])
 ```
 
+## Migrating from 0.5.x
+
+Outside strict mode the decoder now applies only the five recoveries of
+specification 14.4 and throws on every other defect, such as
+`title [draft]: Intro`, a tabular row with too few cells, or content after a
+root array.
+
 ## Migrating from 0.4.x
 
 Release 0.5.0 moves from TOON specification 3.0 to 4.1. The format changed
