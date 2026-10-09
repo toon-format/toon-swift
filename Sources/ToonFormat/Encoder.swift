@@ -114,7 +114,7 @@ public final class TOONEncoder {
         message: """
             TOON specification 4.0 removed key folding. The option still \
             works, and stays off by default, but its output does not conform \
-            to specification 4.1. It is removed in 2.0.
+            to the specification. It is removed in 2.0.
             """
     )
     public var keyFolding: KeyFolding {

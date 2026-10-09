@@ -32,7 +32,7 @@ public final class TOONDecoder {
         message: """
             TOON specification 4.0 removed path expansion. A dotted key is one \
             literal key. The option still works, and its default is now \
-            .disabled so that the decoder follows specification 4.1. It is \
+            .disabled so that the decoder follows the specification. It is \
             removed in 2.0.
             """
     )
