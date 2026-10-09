@@ -798,9 +798,19 @@ private final class Parser {
         guard !countStr.isEmpty else {
             throw TOONDecodingError.invalidHeader("Invalid count in array header: \(content)")
         }
-        // A length beyond the range of Int still forms a header. No scope
-        // holds Int.max elements, so the count stays unmet.
-        let count = Int(countStr) ?? .max
+        // A length beyond the range of Int still forms a header. Strict mode
+        // can never meet it, so it names the declared digits; outside strict
+        // mode the count is advisory.
+        let count: Int
+        if let parsed = Int(countStr) {
+            count = parsed
+        } else if strict {
+            throw TOONDecodingError.invalidHeader(
+                "Array length \(countStr) exceeds the range of Int: \(content)"
+            )
+        } else {
+            count = .max
+        }
 
         // Specification 6 forbids a leading zero in the length.
         if countStr.count > 1, countStr.hasPrefix("0") {
