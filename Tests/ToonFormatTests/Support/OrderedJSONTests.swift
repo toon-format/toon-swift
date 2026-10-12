@@ -6,7 +6,7 @@ import Testing
 /// Tests the JSON reader that feeds the conformance suite.
 ///
 /// ``OrderedJSON`` reads the input and the expected value of every one of the
-/// 538 fixture cases, so it decides whether a case passes. A reader that
+/// 564 fixture cases, so it decides whether a case passes. A reader that
 /// accepts what JSON forbids, or that loses the order of the keys, makes a
 /// case pass for the wrong reason. Nothing else in the suite can see that,
 /// which is why the reader carries its own tests.
