@@ -1090,6 +1090,7 @@ extension TOONEncoder {
         let userInfo: [CodingUserInfoKey: Any]
 
         fileprivate var storage: [Value]
+        fileprivate var writeBack: ((Value) -> Void)?
 
         init(codingPath: [any Swift.CodingKey] = [], userInfo: [CodingUserInfoKey: Any] = [:]) {
             self.codingPath = codingPath
@@ -1125,6 +1126,10 @@ extension TOONEncoder {
                 return .null
             }
             return storage.removeLast()
+        }
+
+        deinit {
+            writeBack?(encodedValue)
         }
     }
 }
@@ -1422,11 +1427,20 @@ extension TOONEncoder {
         }
 
         func superEncoder() -> Swift.Encoder {
-            return encoder
+            return makeSuperEncoder(for: IndexedCodingKey(stringValue: "super"))
         }
 
         func superEncoder(forKey key: Key) -> Swift.Encoder {
-            return encoder
+            return makeSuperEncoder(for: key)
+        }
+
+        private func makeSuperEncoder(for key: any CodingKey) -> Encoder {
+            let nested = Encoder(codingPath: codingPath + [key], userInfo: encoder.userInfo)
+            let slot = key.stringValue
+            // Reserve the key's position before the caller encodes any siblings.
+            container[slot] = .null
+            nested.writeBack = { value in self.container[slot] = value }
+            return nested
         }
 
         func finishEncoding() {

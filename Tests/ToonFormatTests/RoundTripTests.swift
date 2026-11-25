@@ -8,6 +8,51 @@ struct RoundTripTests {
     let encoder = TOONEncoder()
     let decoder = TOONDecoder()
 
+    @Test(arguments: [false, true])
+    func roundTripSuperclass(useExplicitKey: Bool) throws {
+        class Base: Codable {
+            let count: Int
+
+            init(count: Int) {
+                self.count = count
+            }
+        }
+
+        final class Child: Base {
+            enum Keys: String, CodingKey { case base, label }
+            let label: String
+            let useExplicitKey: Bool
+
+            init(count: Int, label: String, useExplicitKey: Bool) {
+                self.label = label
+                self.useExplicitKey = useExplicitKey
+                super.init(count: count)
+            }
+
+            required init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: Keys.self)
+                label = try container.decode(String.self, forKey: .label)
+                useExplicitKey = container.contains(.base)
+                try super.init(from: useExplicitKey ? container.superDecoder(forKey: .base) : container.superDecoder())
+            }
+
+            override func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: Keys.self)
+                let base = useExplicitKey ? container.superEncoder(forKey: .base) : container.superEncoder()
+                try container.encode(label, forKey: .label)
+                try super.encode(to: base)
+            }
+        }
+
+        let original = Child(count: 7, label: "sample", useExplicitKey: useExplicitKey)
+        let data = try encoder.encode(original)
+        let key = useExplicitKey ? "base" : "super"
+        #expect(String(decoding: data, as: UTF8.self) == "\(key):\n  count: 7\nlabel: sample")
+        let decoded = try decoder.decode(Child.self, from: data)
+        #expect(decoded.count == original.count)
+        #expect(decoded.label == original.label)
+    }
+
     @Test func roundTripDate() async throws {
         struct DateObject: Codable, Equatable {
             let created: Date
