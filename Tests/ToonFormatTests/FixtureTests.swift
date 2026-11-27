@@ -68,28 +68,28 @@ struct FixtureTests {
     /// file to another keeps the total. A whole group can shrink while another
     /// group grows. The counts are per file for that reason.
     private static let expectedCounts: [String: Int] = [
-        "decode/arrays-nested.json": 25,
-        "decode/arrays-primitive.json": 19,
-        "decode/arrays-tabular.json": 18,
-        "decode/blank-lines.json": 21,
-        "decode/comments.json": 19,
-        "decode/delimiters.json": 29,
-        "decode/indentation-errors.json": 19,
-        "decode/numbers.json": 28,
-        "decode/objects-keyed.json": 19,
-        "decode/objects.json": 55,
-        "decode/primitives.json": 28,
-        "decode/root-form.json": 8,
-        "decode/validation-errors.json": 56,
-        "decode/whitespace.json": 15,
-        "encode/arrays-nested.json": 15,
-        "encode/arrays-objects.json": 18,
-        "encode/arrays-primitive.json": 13,
+        "decode/arrays-nested.json": 26,
+        "decode/arrays-primitive.json": 17,
+        "decode/arrays-tabular.json": 24,
+        "decode/blank-lines.json": 24,
+        "decode/comments.json": 15,
+        "decode/delimiters.json": 25,
+        "decode/indentation-errors.json": 35,
+        "decode/numbers.json": 15,
+        "decode/objects-keyed.json": 18,
+        "decode/objects.json": 50,
+        "decode/primitives.json": 21,
+        "decode/root-form.json": 13,
+        "decode/validation-errors.json": 103,
+        "decode/whitespace.json": 18,
+        "encode/arrays-nested.json": 14,
+        "encode/arrays-objects.json": 12,
+        "encode/arrays-primitive.json": 11,
         "encode/arrays-tabular.json": 16,
-        "encode/delimiters.json": 22,
-        "encode/objects-keyed.json": 13,
-        "encode/objects.json": 34,
-        "encode/primitives.json": 44,
+        "encode/delimiters.json": 18,
+        "encode/objects-keyed.json": 14,
+        "encode/objects.json": 31,
+        "encode/primitives.json": 40,
         "encode/whitespace.json": 4,
     ]
 
@@ -106,8 +106,8 @@ struct FixtureTests {
         }
         #expect(counts == Self.expectedCounts)
 
-        #expect(Fixtures.encode.count == 179)
-        #expect(Fixtures.decode.count == 359)
+        #expect(Fixtures.encode.count == 160)
+        #expect(Fixtures.decode.count == 404)
     }
 
     /// Guards against a corpus taken from another release.
@@ -125,7 +125,7 @@ struct FixtureTests {
             return
         }
         // The tag adds a patch number to the version of the specification,
-        // so `4.1` targets a tag such as `v4.1.1`.
+        // so `4.4` targets a tag such as `v4.4.0`.
         #expect(ref.hasPrefix("v\(toonSpecVersion)."))
 
         guard case let .string(sha)? = Fixtures.provenance["sha"] else {

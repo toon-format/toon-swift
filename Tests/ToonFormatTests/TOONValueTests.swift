@@ -53,7 +53,7 @@ struct TOONValueTests {
         #expect(object.map(\.key) == ["z", "a", "m"])
     }
 
-    /// The rule of specification 14.3 for a decoder that is not strict: the
+    /// The rule of specification 14.4 for a decoder that is not strict: the
     /// value comes from the last pair, and the position from the first.
     @Test("a repeated key takes the last value and the first position")
     func repeatedKeyKeepsTheFirstPosition() {
